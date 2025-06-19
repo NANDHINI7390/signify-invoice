@@ -47,7 +47,7 @@ const mockPreviousInvoiceItems: string[] = [
 
 const EMAILJS_PUBLIC_KEY = 'fg1f_KwO_bzZFYk9G';
 const EMAILJS_SERVICE_ID = 'YOUR_EMAILJS_SERVICE_ID'; // <-- IMPORTANT: Replace with your Service ID
-const EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID'; // <-- IMPORTANT: Replace with your Template ID
+const EMAILJS_TEMPLATE_ID = 'template_7lzmpkr';
 
 
 export default function CreateInvoicePageClient() {
@@ -106,12 +106,12 @@ export default function CreateInvoicePageClient() {
       if (EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID' || EMAILJS_TEMPLATE_ID === 'YOUR_EMAILJS_TEMPLATE_ID') {
         toast({
           variant: "destructive",
-          title: "EmailJS Not Configured",
-          description: "Please replace placeholder Service ID and Template ID in CreateInvoicePageClient.tsx with your actual EmailJS values.",
+          title: "EmailJS Not Fully Configured",
+          description: "Please replace placeholder Service ID in CreateInvoicePageClient.tsx with your actual EmailJS Service ID.",
           duration: 10000,
         });
         // Simulate sending for testing if not configured
-        console.warn("EmailJS not configured. Simulating email send for navigation.");
+        console.warn("EmailJS Service ID not configured. Simulating email send for navigation.");
         setTimeout(() => {
           setProgress(100);
           router.push('/email-sent?recipientEmail=' + encodeURIComponent(data.recipientEmail));
