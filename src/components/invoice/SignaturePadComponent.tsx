@@ -21,15 +21,18 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (signaturePadInstanceRef.current) {
       const pad = signaturePadInstanceRef.current;
       if (pad.isEmpty()) {
+        console.log('SignaturePadComponent: Pad is empty, sending null.');
         onSignatureChange(null);
         if (placeholderRef.current) placeholderRef.current.style.display = 'block';
       } else {
         const currentDataUrl = pad.toDataURL('image/png');
+        console.log('SignaturePadComponent: Pad is not empty. Data URL (prefix & length):', currentDataUrl.substring(0, 50) + '...', currentDataUrl.length);
         onSignatureChange(currentDataUrl);
         if (placeholderRef.current) placeholderRef.current.style.display = 'none';
       }
     } else {
-      onSignatureChange(null); // Default to null if pad not initialized
+      console.log('SignaturePadComponent: Pad instance not found, sending null.');
+      onSignatureChange(null); 
       if (placeholderRef.current) placeholderRef.current.style.display = 'block';
     }
   }, [onSignatureChange]);
@@ -40,7 +43,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      // Store current signature if any, to re-apply after resize
       const currentSignatureData = pad.isEmpty() ? null : pad.toDataURL('image/png');
 
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
@@ -54,11 +56,11 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ctx.scale(ratio, ratio);
       }
       
-      pad.clear(); // Clear before restoring, especially after context scaling
+      pad.clear(); 
       if (currentSignatureData) {
          pad.fromDataURL(currentSignatureData);
       }
-      // Ensure placeholder visibility and signature state are correct after resize
+      // After resize and potential data restoration, update state
       updateSignatureState();
     }
   }, [updateSignatureState]);
@@ -67,19 +69,20 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgb(255, 255, 255)', 
+        backgroundColor: 'rgb(255, 255, 255)', // Opaque white background for the canvas data
         penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75,
-        maxWidth: 2.5, // Adjusted based on prompt
+        maxWidth: 2.5,
         throttle: 16,
-        minDistance: 5, // Adjusted based on prompt
+        minDistance: 5,
         onBegin: () => {
           setIsDrawing(true);
           if (placeholderRef.current) placeholderRef.current.style.display = 'none';
         },
         onEnd: () => {
           setIsDrawing(false);
-          updateSignatureState(); // Call after stroke ends
+          console.log('SignaturePadComponent: onEnd triggered.');
+          updateSignatureState(); 
         }
       });
       signaturePadInstanceRef.current = pad;
@@ -95,20 +98,21 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // onSignatureChange is stable from useCallback, updateSignatureState and resizeCanvas are memoized
+  }, []); // updateSignatureState and resizeCanvas are memoized
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
       signaturePadInstanceRef.current.clear();
-      setIsDrawing(false); // Reset drawing state
-      updateSignatureState(); // Update parent and placeholder
+      setIsDrawing(false); 
+      console.log('SignaturePadComponent: clearSignature called.');
+      updateSignatureState(); 
     }
   };
   
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-blue-50"
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50" // Light gray background for visual wrapper
       style={{ touchAction: 'none' }} 
     >
       <canvas
@@ -121,7 +125,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ref={placeholderRef}
         id="signature-placeholder"
         className="signature-placeholder absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-        // Initial state managed by updateSignatureState
       >
         ✍️ Draw your signature here
       </div>

@@ -29,6 +29,10 @@ const currencySymbols: { [key: string]: string } = {
   INR: '₹', USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$',
 };
 
+const BLANK_IMAGE_DATA_URL = 'data:,';
+const MIN_DATA_URL_LENGTH = 100; 
+
+
 export default function SigningCompletePageClient() {
   const searchParams = useSearchParams();
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
@@ -48,6 +52,10 @@ export default function SigningCompletePageClient() {
     const signedAtParam = searchParams.get('signedAt');
     const signedUserAgentParam = searchParams.get('signedUserAgent');
 
+    console.log('SigningCompletePageClient useEffect: Received sigString (prefix & length):', sigString ? sigString.substring(0,50) + '...' : null, sigString ? sigString.length : 0);
+    console.log('SigningCompletePageClient useEffect: Received sigType:', sigType);
+
+
     if (dataString) {
       try {
         const parsedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
@@ -63,7 +71,13 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
-    if (sigString) setSignature(decodeURIComponent(sigString));
+    if (sigString && sigString !== BLANK_IMAGE_DATA_URL && sigString.length > MIN_DATA_URL_LENGTH) {
+        setSignature(decodeURIComponent(sigString));
+    } else {
+        console.log('SigningCompletePageClient useEffect: sigString is blank or too short, setting signature to null.');
+        setSignature(null); 
+    }
+    
     if (sigType) setSignatureType(sigType);
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
@@ -73,11 +87,11 @@ export default function SigningCompletePageClient() {
 
   useEffect(() => {
     let i = 0;
-    const textToType = `Invoice ${invoiceId || ''} signed successfully!`;
+    const textToType = \`Invoice \${invoiceId || ''} signed successfully!\`;
     const element = document.getElementById('typewriter-heading');
     if (element) {
-        element.style.setProperty('--typewriter-chars', `${textToType.length}ch`);
-        element.style.setProperty('--typewriter-steps', `${textToType.length}`);
+        element.style.setProperty('--typewriter-chars', \`\${textToType.length}ch\`);
+        element.style.setProperty('--typewriter-steps', \`\${textToType.length}\`);
     }
     setTypewriterText(textToType);
   }, [invoiceId]);
@@ -98,7 +112,11 @@ export default function SigningCompletePageClient() {
       toast({ variant: "destructive", title: "Error Generating PDF", description: "Invoice data is missing." });
       return;
     }
-    toast({ title: "Preparing PDF...", description: `Generating PDF for invoice ${invoiceData.invoiceNumber}.` });
+    toast({ title: "Preparing PDF...", description: \`Generating PDF for invoice \${invoiceData.invoiceNumber}.\` });
+
+    console.log('SigningCompletePageClient handleDownloadPdf: Using signature (prefix & length):', signature ? signature.substring(0,50) + '...' : null, signature ? signature.length : 0);
+    console.log('SigningCompletePageClient handleDownloadPdf: Using signatureType:', signatureType);
+
 
     try {
       const doc = new jsPDF({ compress: true });
@@ -151,7 +169,6 @@ export default function SigningCompletePageClient() {
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
 
-      // Invoice Number and Date on the same line
       doc.setFont("helvetica", "bold"); addText("Invoice Number:", margin, yPos);
       doc.setFont("helvetica", "normal"); addText(invoiceData.invoiceNumber, margin + 35, yPos);
       
@@ -176,8 +193,8 @@ export default function SigningCompletePageClient() {
         doc.setFont("helvetica", "normal");
         invoiceData.items.forEach(item => {
             if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-            const itemText = `${item.description} (x${item.quantity})`;
-            const itemTotal = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${item.total.toFixed(2)}`;
+            const itemText = \`\${item.description} (x\${item.quantity})\`;
+            const itemTotal = \`\${currencySymbols[invoiceData.currency] || invoiceData.currency}\${item.total.toFixed(2)}\`;
             addText(itemText, margin + 2, yPos);
             addText(itemTotal, doc.internal.pageSize.width - margin - doc.getTextWidth(itemTotal), yPos);
             yPos += smallLineSpacing;
@@ -191,24 +208,24 @@ export default function SigningCompletePageClient() {
       doc.setFontSize(12); doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
       addText("TOTAL AMOUNT:", margin, yPos);
-      const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const amountValueText = \`\${currencySymbols[invoiceData.currency] || invoiceData.currency}\${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\`;
       const amountTextWidth = doc.getTextWidth(amountValueText);
-      const currencyTextWidth = doc.getTextWidth(` (${invoiceData.currency})`);
+      const currencyTextWidth = doc.getTextWidth(\` (\${invoiceData.currency})\`);
       doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - amountTextWidth - currencyTextWidth - 2, yPos);
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(\`(\${invoiceData.currency})\`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
       yPos += sectionSpacing * 1.5; 
       
       if (yPos > pageHeight - margin - sectionSpacing * 4) { doc.addPage(); yPos = margin; } 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
       
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      addText(`Signed by: ${invoiceData.recipientName}`, margin, yPos); yPos += smallLineSpacing;
+      addText(\`Signed by: \${invoiceData.recipientName}\`, margin, yPos); yPos += smallLineSpacing;
 
       if (signedAt) {
-        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, margin, yPos); yPos += smallLineSpacing;
+        addText(\`Date Signed: \${formatDateFn(new Date(signedAt), 'PPP p')}\`, margin, yPos); yPos += smallLineSpacing;
       }
       if (signedUserAgent) {
-        addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
+        addText(\`Signed Using: \${getDeviceType(signedUserAgent)}\`, margin, yPos); yPos += smallLineSpacing;
       }
       addText("Signed IP Address: (Client-Side Context)", margin, yPos);
       yPos += sectionSpacing;
@@ -217,7 +234,7 @@ export default function SigningCompletePageClient() {
       if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
       addText("Signature:", margin, yPos); yPos += smallLineSpacing;
 
-      if (signature && signature !== 'data:,') {
+      if (signature && signature !== BLANK_IMAGE_DATA_URL && signature.length > MIN_DATA_URL_LENGTH) {
         const signatureImageWidth = 50; 
         const signatureImageHeight = 25; 
         const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
@@ -229,14 +246,18 @@ export default function SigningCompletePageClient() {
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); doc.setFontSize(12);
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
+        } else { 
+            doc.setFont("helvetica", "italic"); 
+            addText(signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid]", margin, yPos); 
+            yPos += smallLineSpacing;
         }
       } else {
         if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
         doc.setFont("helvetica", "italic"); addText("[Signature Not Provided or Empty]", margin, yPos); yPos += smallLineSpacing;
       }
       
-      doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
-      toast({ variant: "success", title: "Download Started", description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.` });
+      doc.save(\`signed_invoice_\${invoiceData.invoiceNumber || 'document'}.pdf\`);
+      toast({ variant: "success", title: "Download Started", description: \`PDF for invoice \${invoiceData.invoiceNumber} should be downloading.\` });
     } catch (pdfError) {
         console.error("PDF generation failed:", pdfError);
         toast({ variant: "destructive", title: "PDF Generation Failed", description: "Could not generate the PDF." });
@@ -266,7 +287,7 @@ export default function SigningCompletePageClient() {
     <div 
       className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center relative py-10 px-4"
       style={{
-        backgroundImage: `
+        backgroundImage: \`
           radial-gradient(circle, hsl(var(--background)) 60%, transparent 100%),
           repeating-linear-gradient(45deg, 
             hsl(var(--accent)/0.02), 
@@ -274,7 +295,7 @@ export default function SigningCompletePageClient() {
             transparent 10px, 
             transparent 20px
           )
-        `, 
+        \`, 
         backgroundSize: 'cover, auto',
       }}
     >
@@ -284,13 +305,13 @@ export default function SigningCompletePageClient() {
         <h1 
           id="typewriter-heading"
           className="text-2xl md:text-3xl font-bold text-foreground mb-3 font-headline whitespace-nowrap overflow-hidden animate-typewriter mx-auto"
-          style={{ width: `${typewriterText.length}ch`, borderRightColor: 'hsl(var(--foreground))'}}
+          style={{ width: \`\${typewriterText.length}ch\`, borderRightColor: 'hsl(var(--foreground))'}}
         >
           {typewriterText}
         </h1>
         {invoiceData && signedAt && (
           <p className="text-sm text-muted-foreground mb-1 animate-fadeIn flex items-center justify-center" style={{animationDelay: '2.5s'}}>
-            <CalendarDays size={14} className="mr-1.5"/> Signed on: {formatDateFn(new Date(signedAt), 'MMM d, yyyy \'at\' h:mm a')}
+            <CalendarDays size={14} className="mr-1.5"/> Signed on: {formatDateFn(new Date(signedAt), 'MMM d, yyyy \\'at\\' h:mm a')}
           </p>
         )}
          {invoiceData && signedUserAgent && (
