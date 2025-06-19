@@ -16,7 +16,20 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   const [isDrawing, setIsDrawing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
-  // No longer need blankCanvasDataUrl if relying purely on isEmpty and direct toDataURL
+
+  const checkPadEmptyAndNotify = useCallback(() => {
+    if (signaturePadInstanceRef.current) {
+      const pad = signaturePadInstanceRef.current;
+      if (pad.isEmpty()) {
+        onSignatureChange(null);
+        if (placeholderRef.current) placeholderRef.current.style.display = 'block';
+      } else {
+        const currentDataUrl = pad.toDataURL('image/png');
+        onSignatureChange(currentDataUrl);
+        if (placeholderRef.current) placeholderRef.current.style.display = 'none';
+      }
+    }
+  }, [onSignatureChange]);
 
   const resizeCanvas = useCallback(() => {
     if (canvasRef.current && wrapperRef.current && signaturePadInstanceRef.current) {
@@ -24,7 +37,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      const currentData = pad.toDataURL('image/png'); 
+      const currentData = pad.isEmpty() ? null : pad.toDataURL('image/png');
 
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
       canvas.style.height = `200px`; 
@@ -37,54 +50,24 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ctx.scale(ratio, ratio);
       }
       
-      pad.clear(); // Clear before restoring to ensure proper state
-      if (currentData && currentData !== 'data:,') { // Check if there was actual data
-         // Check if pad was truly empty before attempting to restore.
-        // Create a temporary pad to check if currentData represents an empty state.
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempPad = new SignaturePad(tempCanvas, { backgroundColor: 'rgba(255, 255, 255, 0)'});
-        const emptyDataUrlForComparison = tempPad.toDataURL('image/png');
-        tempPad.off();
-
-
-        if (currentData !== emptyDataUrlForComparison) {
-            pad.fromDataURL(currentData);
-        }
+      pad.clear(); 
+      if (currentData) {
+         pad.fromDataURL(currentData);
       }
-      // After resize and potential data restoration, update parent if needed
-      if (!pad.isEmpty()) {
-        if (placeholderRef.current) placeholderRef.current.style.display = 'none';
-      } else {
-        if (placeholderRef.current) placeholderRef.current.style.display = 'block';
-      }
+      checkPadEmptyAndNotify();
     }
-  }, []);
-
-  const checkPadEmptyAndNotify = useCallback(() => {
-    if (signaturePadInstanceRef.current) {
-      const pad = signaturePadInstanceRef.current;
-      if (pad.isEmpty()) {
-        onSignatureChange(null);
-        if (placeholderRef.current) placeholderRef.current.style.display = 'block';
-      } else {
-        onSignatureChange(pad.toDataURL('image/png'));
-        if (placeholderRef.current) placeholderRef.current.style.display = 'none';
-      }
-    }
-  }, [onSignatureChange]);
+  }, [checkPadEmptyAndNotify]);
 
   useEffect(() => {
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)',
-        penColor: 'rgb(31, 41, 55)',
-        minWidth: 0.75, // As per last good config
-        maxWidth: 2.0,  // As per last good config
+        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent, container div has bg
+        penColor: 'rgb(31, 41, 55)', // text-dark
+        minWidth: 0.75,
+        maxWidth: 2.0,
         throttle: 16,
-        minDistance: 3, // As per last good config
+        minDistance: 3,
         onBegin: () => {
           setIsDrawing(true);
           if (placeholderRef.current) placeholderRef.current.style.display = 'none';
@@ -97,7 +80,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       signaturePadInstanceRef.current = pad;
       
       resizeCanvas(); 
-      checkPadEmptyAndNotify(); // Initial check
+      // checkPadEmptyAndNotify(); // Called by resizeCanvas
 
       window.addEventListener('resize', resizeCanvas);
       

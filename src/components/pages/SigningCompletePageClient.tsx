@@ -2,13 +2,13 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Download, AlertTriangle, Loader2, CalendarDays, Smartphone, Monitor, Globe } from 'lucide-react';
+import { Download, AlertTriangle, Loader2, CalendarDays, Smartphone, Monitor } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import AnimatedCheckmark from '@/components/animations/AnimatedCheckmark';
 import { toast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
-import { format as formatDateFn } from 'date-fns'; // Renamed to avoid conflict
+import { format as formatDateFn } from 'date-fns';
 
 interface InvoiceData {
   invoiceNumber: string;
@@ -38,7 +38,6 @@ export default function SigningCompletePageClient() {
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<string | null>(null);
   const [signedUserAgent, setSignedUserAgent] = useState<string | null>(null);
-
 
   const invoiceId = searchParams.get('invoiceId');
 
@@ -105,7 +104,7 @@ export default function SigningCompletePageClient() {
       const doc = new jsPDF({ compress: true });
       const pageHeight = doc.internal.pageSize.height;
       let yPos = 20;
-      const lineSpacing = 6; // Slightly reduced for more content
+      const lineSpacing = 6; 
       const smallLineSpacing = 4.5;
       const sectionSpacing = 8;
       const margin = 15; 
@@ -183,18 +182,18 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing/2; 
       }
       
-      if (yPos > pageHeight - margin - sectionSpacing) { doc.addPage(); yPos = margin; }
+      if (yPos > pageHeight - margin - sectionSpacing * 2) { doc.addPage(); yPos = margin; } // Ensure space for total
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
 
-      doc.setFontSize(11); doc.setFont("helvetica", "bold");
+      doc.setFontSize(12); doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
       addText("TOTAL AMOUNT:", margin, yPos);
       const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      doc.setFontSize(12); addText(amountValueText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountValueText) - doc.getTextWidth(` (${invoiceData.currency})`) - 2 , yPos);
-      doc.setFontSize(9); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - doc.getTextWidth(` (${invoiceData.currency})`), yPos);
-      yPos += sectionSpacing * 1.2; 
+      doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountValueText) - doc.getTextWidth(` (${invoiceData.currency})`) - 2 , yPos);
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - doc.getTextWidth(` (${invoiceData.currency})`), yPos);
+      yPos += sectionSpacing * 1.5; 
       
-      if (yPos > pageHeight - margin - sectionSpacing * 3) { doc.addPage(); yPos = margin; } // Ensure space for signature details
+      if (yPos > pageHeight - margin - sectionSpacing * 4) { doc.addPage(); yPos = margin; } 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
       
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
@@ -206,7 +205,7 @@ export default function SigningCompletePageClient() {
       if (signedUserAgent) {
         addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
       }
-      addText("Signed IP Address: (Client-Side Context)", margin, yPos); // Placeholder
+      addText("Signed IP Address: (Client-Side Context)", margin, yPos);
       yPos += sectionSpacing;
 
       doc.setFont("helvetica", "bold");
@@ -214,11 +213,14 @@ export default function SigningCompletePageClient() {
       addText("Signature:", margin, yPos); yPos += smallLineSpacing;
 
       if (signature) {
-        const signatureAreaHeight = signatureType === 'draw' ? 30 : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
+        const signatureImageWidth = 50; // mm
+        const signatureImageHeight = 25; // mm
+        const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
         if (yPos + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
 
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
-          doc.addImage(signature, 'PNG', margin, yPos, 60, 30); yPos += 30 + smallLineSpacing;
+          doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight); 
+          yPos += signatureImageHeight + smallLineSpacing;
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); doc.setFontSize(12);
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
