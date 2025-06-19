@@ -71,10 +71,10 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       
       return () => {
         window.removeEventListener('resize', resizeCanvas);
-        // signaturePadInstanceRef.current?.off(); // Clean up if signature_pad has an 'off' method
+        signaturePadInstanceRef.current?.off(); // Clean up signature_pad's own listeners
       };
     }
-  }, [resizeCanvas, onSignatureChange]); // Added onSignatureChange to dependency array
+  }, [resizeCanvas, onSignatureChange]);
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
