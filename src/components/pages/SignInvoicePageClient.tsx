@@ -126,9 +126,9 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
 
   const handleSign = () => {
-    const isDrawSignatureProvided = !!signatureDataUrl && signatureDataUrl !== 'data:,';
+    const isDrawSignatureActuallyProvided = signatureDataUrl && signatureDataUrl !== 'data:,';
     const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
-    const hasValidSignature = isDrawSignatureProvided || isTextSignatureProvided;
+    const hasValidSignature = isDrawSignatureActuallyProvided || isTextSignatureProvided;
 
     if (!agreementChecked) {
       toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
@@ -148,7 +148,11 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     setTimeout(() => {
       setIsLoading(false);
       const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
-      const signatureToSend = useTextSignature ? textSignature : signatureDataUrl;
+      
+      const signatureToSend = useTextSignature 
+        ? textSignature 
+        : (isDrawSignatureActuallyProvided ? signatureDataUrl : null);
+      
       const signatureTypeParam = useTextSignature ? 'text' : 'draw';
 
       let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
@@ -156,9 +160,11 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         const dataToPass = { ...invoiceData };
         url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
       }
-      if (signatureToSend) {
+
+      if (signatureToSend) { // Only add if signatureToSend is not null/empty
         url += `&signature=${encodeURIComponent(signatureToSend)}`;
       }
+      
       url += `&signatureType=${signatureTypeParam}`;
       url += `&signedAt=${encodeURIComponent(signedAt)}`;
       url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
@@ -264,7 +270,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         </CardContent>
       </Card>
 
-      {/* Signature Section from HTML Structure */}
       <Card className="mt-8 bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border signature-section">
         <CardHeader className="bg-purple-accent-DEFAULT/5 p-6 border-b border-purple-accent-DEFAULT/10">
           <CardTitle className="text-2xl font-modern-sans text-purple-accent-DEFAULT text-center">Please Review and Sign Below</CardTitle>
@@ -301,24 +306,20 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
               {textSignature && <p className="mt-2 text-sm text-muted-foreground">Preview: <span className="font-medium" style={{ fontFamily: 'cursive', fontSize: '1.2rem' }}>{textSignature}</span></p>}
             </div>
           ) : (
-            // Signature Canvas with Enhanced Container
-            <div className="signature-container my-5"> {/* Added margin */}
+            <div className="signature-container my-5">
                 <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
             </div>
           )}
           
-          {/* Status Indicator */}
           <div id="signature-status" className="signature-status text-center my-2" style={{ color: signatureStatusColor }}>
             {signatureStatusText}
           </div>
           
-          {/* Agreement Section */}
           <div className="agreement-section" onClick={toggleAgreement} style={{ cursor: 'pointer' }}>
             <div className="checkbox-container flex items-center space-x-3">
               <div id="custom-checkbox" className={`custom-checkbox ${agreementChecked ? 'checked' : ''}`}>
                 {agreementChecked && '✓'}
               </div>
-              {/* Hidden actual checkbox for form semantics if needed, but state is managed by React */}
               <input type="checkbox" id="agreement-checkbox" checked={agreementChecked} onChange={() => {}} style={{ display: 'none' }} />
               <Label htmlFor="agreement-checkbox" className="text-sm text-muted-foreground leading-relaxed select-none">
                 I, <span className="font-semibold text-foreground">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
@@ -327,7 +328,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
           </div>
         </CardContent>
         <CardFooter className="p-6 bg-background border-t border-border">
-          {/* Sign Button with Enhanced States */}
           <Button 
             type="button"
             id="sign-invoice-button"
@@ -349,3 +349,4 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   );
 }
 
+    

@@ -156,9 +156,11 @@ export default function SigningCompletePageClient() {
       
       const dateLabel = "Invoice Date:";
       const formattedInvoiceDate = formatDateFn(new Date(invoiceData.invoiceDate), 'PPP');
-      const dateXPos = doc.internal.pageSize.width - margin - doc.getTextWidth(formattedInvoiceDate) - doc.getTextWidth(dateLabel) - 5;
+      const dateStringWidth = doc.getTextWidth(formattedInvoiceDate);
+      const dateLabelWidth = doc.getTextWidth(dateLabel);
+      const dateXPos = doc.internal.pageSize.width - margin - dateStringWidth - dateLabelWidth - 2; // Dynamic X based on content
       doc.setFont("helvetica", "bold"); addText(dateLabel, dateXPos, yPos);
-      doc.setFont("helvetica", "normal"); addText(formattedInvoiceDate, dateXPos + doc.getTextWidth(dateLabel) + 2, yPos);
+      doc.setFont("helvetica", "normal"); addText(formattedInvoiceDate, dateXPos + dateLabelWidth + 2, yPos);
       yPos += lineSpacing; yPos += sectionSpacing / 2;
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
@@ -182,15 +184,17 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing/2; 
       }
       
-      if (yPos > pageHeight - margin - sectionSpacing * 2) { doc.addPage(); yPos = margin; } // Ensure space for total
+      if (yPos > pageHeight - margin - sectionSpacing * 2) { doc.addPage(); yPos = margin; } 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
 
       doc.setFontSize(12); doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
       addText("TOTAL AMOUNT:", margin, yPos);
       const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountValueText) - doc.getTextWidth(` (${invoiceData.currency})`) - 2 , yPos);
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - doc.getTextWidth(` (${invoiceData.currency})`), yPos);
+      const amountTextWidth = doc.getTextWidth(amountValueText);
+      const currencyTextWidth = doc.getTextWidth(` (${invoiceData.currency})`);
+      doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - amountTextWidth - currencyTextWidth - 2, yPos);
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
       yPos += sectionSpacing * 1.5; 
       
       if (yPos > pageHeight - margin - sectionSpacing * 4) { doc.addPage(); yPos = margin; } 
@@ -205,7 +209,7 @@ export default function SigningCompletePageClient() {
       if (signedUserAgent) {
         addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
       }
-      addText("Signed IP Address: (Client-Side Context)", margin, yPos);
+      addText("Signed IP Address: (Client-Side Context)", margin, yPos); // Placeholder
       yPos += sectionSpacing;
 
       doc.setFont("helvetica", "bold");
@@ -213,10 +217,15 @@ export default function SigningCompletePageClient() {
       addText("Signature:", margin, yPos); yPos += smallLineSpacing;
 
       if (signature) {
-        const signatureImageWidth = 50; // mm
-        const signatureImageHeight = 25; // mm
+        const signatureImageWidth = 50; 
+        const signatureImageHeight = 25; 
         const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
         if (yPos + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
+
+        // Draw a border around the signature area for debugging
+        doc.setDrawColor(200, 200, 200); // Light gray border
+        doc.rect(margin, yPos, signatureImageWidth, signatureImageHeight);
+
 
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
           doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight); 
@@ -314,3 +323,5 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
+
+    
