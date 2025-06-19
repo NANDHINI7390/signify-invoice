@@ -37,7 +37,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      const currentData = pad.isEmpty() ? null : pad.toDataURL('image/png');
+      const currentSignatureData = pad.isEmpty() ? null : pad.toDataURL('image/png');
 
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
       canvas.style.height = `200px`; 
@@ -50,10 +50,11 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ctx.scale(ratio, ratio);
       }
       
-      pad.clear(); 
-      if (currentData) {
-         pad.fromDataURL(currentData);
+      pad.clear(); // Clear before restoring, especially after context scaling
+      if (currentSignatureData) {
+         pad.fromDataURL(currentSignatureData);
       }
+      // Ensure placeholder visibility is correct after resize and potential restoration
       checkPadEmptyAndNotify();
     }
   }, [checkPadEmptyAndNotify]);
@@ -62,8 +63,8 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent, container div has bg
-        penColor: 'rgb(31, 41, 55)', // text-dark
+        backgroundColor: 'rgb(255, 255, 255)', // Opaque white background for the signature itself
+        penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75,
         maxWidth: 2.0,
         throttle: 16,
@@ -80,7 +81,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       signaturePadInstanceRef.current = pad;
       
       resizeCanvas(); 
-      // checkPadEmptyAndNotify(); // Called by resizeCanvas
+      checkPadEmptyAndNotify(); // Initial check
 
       window.addEventListener('resize', resizeCanvas);
       
@@ -89,33 +90,35 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         signaturePadInstanceRef.current?.off(); 
       };
     }
-  }, [resizeCanvas, checkPadEmptyAndNotify]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSignatureChange]); // checkPadEmptyAndNotify and resizeCanvas are memoized
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
       signaturePadInstanceRef.current.clear();
       onSignatureChange(null); 
-      setIsDrawing(false);
-      if (placeholderRef.current) placeholderRef.current.style.display = 'block';
+      setIsDrawing(false); // Reset drawing state
+      if (placeholderRef.current) placeholderRef.current.style.display = 'block'; // Show placeholder
     }
   };
   
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-blue-50 z-40"
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-blue-50" // Container styling
       style={{ touchAction: 'none' }} 
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair"
+        className="w-full h-full cursor-crosshair" // Canvas takes full space of container
         aria-label="Signature Pad"
         id="signature-canvas"
       />
       <div 
         ref={placeholderRef}
         id="signature-placeholder"
-        className="signature-placeholder"
+        className="signature-placeholder absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        style={{ display: (signaturePadInstanceRef.current?.isEmpty() && !isDrawing) ? 'block' : 'none' }}
       >
         ✍️ Draw your signature here
       </div>
@@ -124,9 +127,10 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         variant="ghost"
         size="icon" 
         onClick={clearSignature}
-        className="absolute top-2 right-2 text-text-light hover:text-destructive p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full z-50 clear-btn" 
+        className="absolute top-2 right-2 text-muted-foreground hover:text-destructive p-1 h-8 w-8 active:scale-90 bg-card/50 hover:bg-card/80 rounded-full z-10 clear-btn" 
         aria-label="Clear Signature"
         id="clear-signature"
+        // Disable if not drawing AND pad is empty. Enable if drawing or pad has content.
         disabled={!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true)} 
       >
         <Trash2 className="w-4 h-4" />
@@ -134,3 +138,4 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     </div>
   );
 }
+

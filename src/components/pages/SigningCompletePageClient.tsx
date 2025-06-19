@@ -151,17 +151,18 @@ export default function SigningCompletePageClient() {
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
 
+      // Invoice Number and Date on the same line
       doc.setFont("helvetica", "bold"); addText("Invoice Number:", margin, yPos);
       doc.setFont("helvetica", "normal"); addText(invoiceData.invoiceNumber, margin + 35, yPos);
       
       const dateLabel = "Invoice Date:";
       const formattedInvoiceDate = formatDateFn(new Date(invoiceData.invoiceDate), 'PPP');
       const dateStringWidth = doc.getTextWidth(formattedInvoiceDate);
-      const dateLabelWidth = doc.getTextWidth(dateLabel);
-      const dateXPos = doc.internal.pageSize.width - margin - dateStringWidth - dateLabelWidth - 2; // Dynamic X based on content
-      doc.setFont("helvetica", "bold"); addText(dateLabel, dateXPos, yPos);
-      doc.setFont("helvetica", "normal"); addText(formattedInvoiceDate, dateXPos + dateLabelWidth + 2, yPos);
+      const dateXPos = doc.internal.pageSize.width - margin - dateStringWidth;
+      doc.setFont("helvetica", "normal"); addText(formattedInvoiceDate, dateXPos, yPos);
+      doc.setFont("helvetica", "bold"); addText(dateLabel, dateXPos - doc.getTextWidth(dateLabel) - 2, yPos);
       yPos += lineSpacing; yPos += sectionSpacing / 2;
+
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
       
@@ -209,23 +210,18 @@ export default function SigningCompletePageClient() {
       if (signedUserAgent) {
         addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
       }
-      addText("Signed IP Address: (Client-Side Context)", margin, yPos); // Placeholder
+      addText("Signed IP Address: (Client-Side Context)", margin, yPos);
       yPos += sectionSpacing;
 
       doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
       addText("Signature:", margin, yPos); yPos += smallLineSpacing;
 
-      if (signature) {
+      if (signature && signature !== 'data:,') {
         const signatureImageWidth = 50; 
         const signatureImageHeight = 25; 
         const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
         if (yPos + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
-
-        // Draw a border around the signature area for debugging
-        doc.setDrawColor(200, 200, 200); // Light gray border
-        doc.rect(margin, yPos, signatureImageWidth, signatureImageHeight);
-
 
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
           doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight); 
@@ -236,7 +232,7 @@ export default function SigningCompletePageClient() {
         }
       } else {
         if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-        doc.setFont("helvetica", "italic"); addText("[Signature Not Provided]", margin, yPos); yPos += smallLineSpacing;
+        doc.setFont("helvetica", "italic"); addText("[Signature Not Provided or Empty]", margin, yPos); yPos += smallLineSpacing;
       }
       
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
@@ -323,5 +319,3 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
-
-    
