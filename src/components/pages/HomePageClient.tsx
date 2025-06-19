@@ -48,16 +48,17 @@ export default function HomePageClient() {
           <p className="text-lg md:text-xl text-gray-200 mb-10 animate-slideInUp font-body" style={{ animationDelay: '0.3s' }}>
             Create professional invoices and get them signed instantly, securely, and for free.
           </p>
-          <Link href="/create-invoice" passHref>
-            <Button
-              size="lg"
-              className="bg-success-green-DEFAULT hover:bg-success-green-dark text-white font-semibold py-4 px-8 rounded-xl text-lg shadow-button-hover-green transform hover:-translate-y-1 transition-all duration-300 animate-slideInUp active:scale-95 min-h-[44px]"
-              style={{ animationDelay: '0.5s' }}
-              aria-label="Create New Invoice"
-            >
+          <Button
+            asChild
+            size="lg"
+            className="bg-success-green-DEFAULT hover:bg-success-green-dark text-white font-semibold py-4 px-8 rounded-xl text-lg shadow-button-hover-green transform hover:-translate-y-1 transition-all duration-300 animate-slideInUp active:scale-95 min-h-[44px]"
+            style={{ animationDelay: '0.5s' }}
+            aria-label="Create New Invoice"
+          >
+            <Link href="/create-invoice">
               Get Started Now <ArrowRight className="ml-2" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </section>
 
