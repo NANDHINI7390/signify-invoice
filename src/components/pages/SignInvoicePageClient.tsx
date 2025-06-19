@@ -38,7 +38,6 @@ const currencySymbols: { [key: string]: string } = {
   CAD: 'C$',
 };
 
-// Mock data if no data is passed via params (for development/fallback)
 const mockInvoiceFallback: InvoiceData = {
   id: "INV-FALLBACK-001",
   invoiceNumber: "INV-FALLBACK-001",
@@ -69,6 +68,8 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   const [textSignature, setTextSignature] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [buttonText, setButtonText] = useState('Please sign above');
+
 
   useEffect(() => {
     const dataString = searchParams.get('data');
@@ -80,14 +81,12 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       } catch (e) {
         console.error("Failed to parse invoice data from URL:", e);
         setError("Invalid invoice link. Data is corrupted.");
-        setInvoiceData(mockInvoiceFallback); // Fallback to mock on error
+        setInvoiceData(mockInvoiceFallback); 
         toast({ variant: "destructive", title: "Error", description: "Corrupted invoice data in link. Displaying sample." });
       }
     } else {
-      // Fallback to mock if no data is provided (e.g. direct navigation)
       console.warn(`No invoice data in URL for ID: ${invoiceId}. Using mock data.`);
       setInvoiceData(mockInvoiceFallback);
-      // toast({ title: "Notice", description: "Displaying sample invoice data." });
     }
   }, [invoiceId, searchParams]);
 
@@ -96,29 +95,41 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     setSignatureDataUrl(dataUrl);
   }, []);
 
+  useEffect(() => {
+    const hasSignature = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
+    const hasAgreement = agreementChecked;
+
+    if (hasSignature && hasAgreement) {
+      setButtonText('✓ Sign Invoice Now');
+    } else if (hasSignature && !hasAgreement) {
+      setButtonText('Please agree to terms');
+    } else {
+      setButtonText('Please sign above');
+    }
+  }, [signatureDataUrl, textSignature, useTextSignature, agreementChecked]);
+
 
   const handleSign = () => {
+    const hasValidSignature = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
+
     if (!agreementChecked) {
       toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
-      const agreeCheckbox = document.getElementById('agreement');
+      const agreeCheckbox = document.getElementById('agreement-checkbox');
       if (agreeCheckbox) agreeCheckbox.focus();
       return;
     }
-    if (!useTextSignature && !signatureDataUrl) {
-      toast({ variant: "destructive", title: "Signature Required", description: "Please draw your signature or type it.", duration: 3000 });
-      return;
-    }
-    if (useTextSignature && !textSignature.trim()) {
-      toast({ variant: "destructive", title: "Signature Required", description: "Please type your name for text signature.", duration: 3000 });
-      const textSigInput = document.getElementById('textSignature');
-      if (textSigInput) textSigInput.focus();
+    if (!hasValidSignature) {
+      toast({ variant: "destructive", title: "Signature Required", description: "Please draw or type your signature.", duration: 3000 });
+      if (useTextSignature) {
+        const textSigInput = document.getElementById('textSignature');
+        if (textSigInput) textSigInput.focus();
+      }
       return;
     }
 
     setIsLoading(true);
     toast({ title: "Processing Signature...", description: "Please wait a moment.", duration: 2000 });
     
-    // Simulate API call
     setTimeout(() => {
       setIsLoading(false);
       const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
@@ -159,7 +170,8 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   }
   
   const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
-  const isButtonDisabled = isLoading || !agreementChecked || (useTextSignature ? !textSignature.trim() : !signatureDataUrl);
+  const isSignatureProvided = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
+  const isButtonDisabled = isLoading || !agreementChecked || !isSignatureProvided;
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-0 animate-fadeIn">
@@ -277,16 +289,16 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
           )}
           
           <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-start space-x-3 relative z-50 bg-transparent"> {/* Applied z-index and positioning */}
+            <div className="flex items-start space-x-3 relative z-50 bg-transparent">
               <Checkbox
-                id="agreement"
+                id="agreement-checkbox" // Updated ID
                 checked={agreementChecked}
                 onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
                 className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0 peer"
                 aria-labelledby="agreement-label-text"
               />
               <Label
-                htmlFor="agreement"
+                htmlFor="agreement-checkbox" // Updated htmlFor
                 id="agreement-label-text"
                 className="flex-1 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
@@ -299,14 +311,14 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
           <Button 
             onClick={handleSign} 
             disabled={isButtonDisabled}
-            className="w-full text-lg py-3 min-h-[50px] gradient-button-blue-to-green text-white font-semibold rounded-xl shadow-button-hover-blue hover:transform hover:-translate-y-1 transition-all duration-300 active:scale-95"
+            className={`w-full text-lg py-3 min-h-[50px] text-white font-semibold rounded-xl shadow-button-hover-blue hover:transform hover:-translate-y-1 transition-all duration-300 active:scale-95 ${isButtonDisabled ? 'bg-muted hover:bg-muted cursor-not-allowed' : 'gradient-button-blue-to-green'}`}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
-              <Check className="mr-2 h-5 w-5" />
+              isSignatureProvided && agreementChecked && <Check className="mr-2 h-5 w-5" />
             )}
-            {isLoading ? 'Processing Signature...' : 'Sign and Confirm Invoice'}
+            {isLoading ? 'Processing Signature...' : buttonText}
           </Button>
         </CardFooter>
       </Card>

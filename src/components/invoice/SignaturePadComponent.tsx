@@ -2,7 +2,7 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-import SignaturePad from 'signature_pad'; // Directly import, will be installed via package.json
+import SignaturePad from 'signature_pad';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 
@@ -22,14 +22,11 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      // Save current signature data before resizing
       const data = pad.toDataURL();
 
-      // Set display size
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
-      canvas.style.height = `200px`; // Fixed display height
+      canvas.style.height = `200px`;
 
-      // Set actual size in memory (scaled for high DPI)
       canvas.width = wrapperRef.current.offsetWidth * ratio;
       canvas.height = 200 * ratio; 
       
@@ -39,7 +36,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       }
       
       pad.clear(); 
-      // Restore signature if it wasn't just an empty "data:," string
+      // signature_pad's toDataURL returns 'data:,' for an empty canvas
       if (data && data !== "data:,") {
         pad.fromDataURL(data);
       }
@@ -52,17 +49,15 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
         backgroundColor: 'rgb(255, 255, 255)', 
-        penColor: 'rgb(31, 41, 55)', // text-dark color
+        penColor: 'rgb(31, 41, 55)',
         onBegin: () => setIsDrawing(true),
         onEnd: () => {
           setIsDrawing(false);
           if (signaturePadInstanceRef.current) {
             const currentPad = signaturePadInstanceRef.current;
-            // signature_pad's toDataURL returns 'data:,' for an empty canvas
             const currentDataUrl = currentPad.toDataURL('image/png');
-            const isEmptyCanvas = currentDataUrl === 'data:,';
-
-            if (!isEmptyCanvas) {
+            // Directly check if dataURL indicates an empty canvas ('data:,')
+            if (currentDataUrl && currentDataUrl !== 'data:,') {
               onSignatureChange(currentDataUrl);
             } else {
               onSignatureChange(null);
@@ -72,7 +67,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       });
       signaturePadInstanceRef.current = pad;
       
-      resizeCanvas(); // Initial resize
+      resizeCanvas(); 
 
       window.addEventListener('resize', resizeCanvas);
       
@@ -94,11 +89,12 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border border-primary-blue-DEFAULT z-40 bg-card-white" // Applied z-index and positioning
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border border-primary-blue-DEFAULT z-40 bg-card-white"
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair touch-none bg-card-white" // Ensure canvas fills the div
+        className="w-full h-full cursor-crosshair touch-none bg-card-white"
+        style={{ touchAction: 'none' }} // Explicitly add touch-action: none
         aria-label="Signature Pad"
       ></canvas>
       <Button
@@ -120,4 +116,3 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     </div>
   );
 }
-
