@@ -4,41 +4,46 @@
 
 @layer base {
   :root {
-    --background: 210 60% 97%; /* #F0F4F8 Very light blue */
-    --foreground: 215 28% 17%; /* #1F2937 Text Dark */
+    /* Signify Invoice Design System Colors */
+    --background: 220 14% 96%; /* #F8FAFC Background Gray */
+    --foreground: 220 29% 17%; /* #1F2937 Text Dark */
 
     --card: 0 0% 100%; /* #FFFFFF Card White */
-    --card-foreground: 215 28% 17%; /* #1F2937 Text Dark */
+    --card-foreground: 220 29% 17%; /* #1F2937 Text Dark */
 
-    --popover: 0 0% 100%; /* #FFFFFF */
-    --popover-foreground: 215 28% 17%; /* #1F2937 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 29% 17%;
 
-    --primary: 208 30% 49%; /* #5C80A4 Desaturated blue */
+    --primary: 217 91% 60%; /* #3B82F6 Primary Blue */
     --primary-foreground: 0 0% 100%; /* White for contrast */
 
-    --secondary: 220 13% 91%; /* #E5E7EB Light Gray */
+    --secondary: 220 13% 91%; /* #E5E7EB Light Gray - kept for existing components */
     --secondary-foreground: 215 14% 47%; /* #6B7280 Text Light */
+    
+    --muted: 220 16% 96%; /* #F3F4F6 Very Light Gray - kept */
+    --muted-foreground: 220 14% 47%; /* #6B7280 Text Light */
 
-    --muted: 220 16% 96%; /* #F3F4F6 Very Light Gray */
-    --muted-foreground: 215 14% 47%; /* #6B7280 Text Light */
-
-    --accent: 155 29% 50%; /* #5CA480 Analogous blue-green */
+    --accent: 159 78% 40%; /* #10B981 Success Green - main accent */
     --accent-foreground: 0 0% 100%; /* White for contrast */
-
+    
     --destructive: 36 90% 50%; /* #F59E0B Warning Orange */
-    --destructive-foreground: 0 0% 100%; /* White for contrast */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 213 11% 85%; /* #D1D5DB Neutral Gray */
-    --input: 213 11% 85%; /* #D1D5DB Neutral Gray */
+    --border: 220 13% 89%; /* #E0E0E0 - slightly adjusted for cards */
+    --input: 220 13% 89%;
     --ring: 217 91% 60%; /* #3B82F6 Primary Blue for focus states */
 
-    --radius: 0.5rem;
-
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --radius: 0.5rem; /* 8px */
+    
+    /* Additional colors from PRD for specific uses if needed directly */
+    --purple-accent: 262 84% 61%; /* #8B5CF6 */
+    
+    /* Chart colors - can be themed if charts are used extensively */
+    --chart-1: 217 91% 60%; /* Primary Blue */
+    --chart-2: 159 78% 40%; /* Success Green */
+    --chart-3: 262 84% 61%; /* Purple Accent */
+    --chart-4: 36 90% 50%;  /* Warning Orange */
+    --chart-5: 220 13% 60%; /* A neutral gray */
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -51,33 +56,35 @@
   }
 
   .dark {
-    --background: 215 28% 17%; /* #1F2937 Text Dark */
-    --foreground: 210 60% 97%; /* #F0F4F8 Very light blue */
+    --background: 220 29% 10%; /* Darker Background */
+    --foreground: 220 14% 90%; /* Lighter Text */
 
-    --card: 215 28% 12%; /* Darker card background */
-    --card-foreground: 210 60% 97%;
+    --card: 220 29% 15%; /* Darker Card */
+    --card-foreground: 220 14% 90%;
 
-    --popover: 215 28% 12%;
-    --popover-foreground: 210 60% 97%;
+    --popover: 220 29% 15%;
+    --popover-foreground: 220 14% 90%;
 
-    --primary: 208 30% 59%; /* Lighter primary for dark mode */
-    --primary-foreground: 215 28% 10%; /* Darker text for contrast */
+    --primary: 217 91% 65%; /* Lighter Primary Blue for dark mode */
+    --primary-foreground: 220 29% 10%;
 
-    --secondary: 215 14% 28%; /* #374151 */
-    --secondary-foreground: 210 60% 97%;
+    --secondary: 220 14% 25%; 
+    --secondary-foreground: 220 14% 80%;
+    
+    --muted: 220 14% 25%;
+    --muted-foreground: 220 14% 70%;
 
-    --muted: 215 14% 28%;
-    --muted-foreground: 215 14% 57%; /* Lighter muted text */
-
-    --accent: 155 29% 60%; /* Lighter accent for dark mode */
-    --accent-foreground: 215 28% 10%;
-
-    --destructive: 36 90% 60%; /* Lighter destructive for dark mode */
+    --accent: 159 78% 50%; /* Lighter Success Green */
+    --accent-foreground: 220 29% 10%;
+    
+    --destructive: 36 90% 55%; /* Lighter Warning Orange */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 14% 34%; /* Darker border */
-    --input: 215 14% 34%;
-    --ring: 217 91% 70%; /* Lighter ring */
+    --border: 220 13% 30%;
+    --input: 220 13% 30%;
+    --ring: 217 91% 65%;
+    
+    --purple-accent: 262 84% 70%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -96,13 +103,19 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-body);
+    font-family: var(--font-body); /* 'PT Sans' */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    font-size: 16px; /* Base font size */
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline;
+    font-family: var(--font-headline); /* 'Playfair Display' for main, or a modern sans-serif for others */
+  }
+  /* Use a modern sans-serif for card titles and sub-headings for cleaner look as per PRD */
+  .font-modern-sans {
+     font-family: var(--font-body); /* PT Sans is a modern sans-serif */
+     font-weight: 600; /* Semi-bold for titles */
   }
 }
 
@@ -112,31 +125,51 @@
     background-size: 200% 200%;
     animation: gradientAnimation 10s ease infinite;
   }
-  .gradient-button-green-blue {
-    background-image: linear-gradient(to right, #10B981 0%, #3B82F6 50%, #10B981 100%);
+  
+  .gradient-button-green-darker-green {
+    background-image: linear-gradient(to right, theme('colors.success-green.DEFAULT') 0%, theme('colors.success-green.dark') 50%, theme('colors.success-green.DEFAULT') 100%);
     background-size: 200% auto;
     transition: background-position 0.5s ease-out;
   }
-  .gradient-button-green-blue:hover {
+  .gradient-button-green-darker-green:hover {
     background-position: right center;
   }
 
-  .gradient-button-blue-green {
-    background-image: linear-gradient(to right, #3B82F6 0%, #10B981 50%, #3B82F6 100%);
+  .gradient-button-blue-primary {
+    background-image: linear-gradient(to right, theme('colors.primary-blue.DEFAULT') 0%, theme('colors.primary-blue.dark') 50%, theme('colors.primary-blue.DEFAULT') 100%);
     background-size: 200% auto;
     transition: background-position 0.5s ease-out;
   }
-  .gradient-button-blue-green:hover {
+  .gradient-button-blue-primary:hover {
     background-position: right center;
   }
   
+  .gradient-button-blue-to-green {
+    background-image: linear-gradient(to right, theme('colors.primary-blue.DEFAULT') 0%, theme('colors.success-green.DEFAULT') 50%, theme('colors.primary-blue.DEFAULT') 100%);
+    background-size: 200% auto;
+    transition: background-position 0.5s ease-out;
+  }
+  .gradient-button-blue-to-green:hover {
+    background-position: right center;
+  }
+
   .text-gradient-blue-purple {
     background: linear-gradient(45deg, #667eea, #764ba2);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  /* Focus glow animation for inputs */
+  .input-focus-glow {
+    @apply focus:ring-2 focus:ring-primary focus:border-primary;
+    transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  .input-focus-glow:focus {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.3);
+  }
 }
 
+/* Animations from PRD */
 @keyframes gradientAnimation {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -158,9 +191,11 @@
   50% { transform: scale(1.05); opacity: 1; }
 }
 
-@keyframes drawCheckmark {
-  0% { stroke-dashoffset: 30; }
-  100% { stroke-dashoffset: 0; }
+/* Checkmark draw-in animation (stroke-dasharray/offset to be set on SVG path) */
+@keyframes drawCheckmarkPath {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes slideInUp {
@@ -171,26 +206,62 @@
 @keyframes typewriter {
   from { width: 0; }
   to { width: 100%; }
+  
 }
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 
 @keyframes gentleShake {
   0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80% { transform: translateX(3px); }
 }
 
+@keyframes confettiFall {
+  0% { transform: translateY(-20px) rotateZ(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotateZ(720deg); opacity: 0; }
+}
+
+
+/* Animation utility classes */
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out forwards;
 }
 .animate-subtleBounce {
-  animation: subtleBounce 1.5s ease-in-out infinite;
+  animation: subtleBounce 2s ease-in-out infinite;
 }
 .animate-gentlePulse {
-  animation: gentlePulse 2s ease-in-out infinite;
+  animation: gentlePulse 2.5s ease-in-out infinite;
 }
 .animate-slideInUp {
   animation: slideInUp 0.5s ease-out forwards;
 }
 .animate-gentleShake {
-  animation: gentleShake 0.5s ease-in-out;
+  animation: gentleShake 0.4s ease-in-out;
+}
+.animate-typewriter {
+  animation: typewriter 2s steps(40, end) 1s 1 normal both,
+             caretBlink 750ms steps(40, end) infinite normal;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid hsl(var(--foreground)); /* Caret */
+}
+.animate-confettiFall {
+  animation-name: confettiFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite; /* Keep this if pieces are reused */
+}
+
+/* Styles for specific card backgrounds */
+.bg-invoice-your-details {
+  background-color: #F0F9FF; /* Light blue */
+}
+.bg-invoice-recipient-details {
+  background-color: #F0FDF4; /* Light green */
+}
+.bg-invoice-info {
+  background-color: #FAF5FF; /* Light purple */
 }

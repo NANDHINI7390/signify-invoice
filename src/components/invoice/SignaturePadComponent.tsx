@@ -1,16 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-// Conditional import to prevent build errors if 'signature_pad' is not installed.
-let SignaturePad: any = undefined;
-if (typeof window !== 'undefined') {
-  try {
-    SignaturePad = require('signature_pad').default || require('signature_pad');
-  } catch (e) {
-    console.warn("signature_pad library not found. Signature functionality will be disabled.");
-  }
-}
-
+import SignaturePad from 'signature_pad'; // Directly import, will be installed via package.json
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 
@@ -20,7 +11,7 @@ interface SignaturePadComponentProps {
 
 export default function SignaturePadComponent({ onSignatureChange }: SignaturePadComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const signaturePadInstanceRef = useRef<any>(null); // Use 'any' for SignaturePad instance
+  const signaturePadInstanceRef = useRef<SignaturePad | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -30,26 +21,23 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      // Store current signature data
       const data = pad.toDataURL();
 
+      // Set display size
+      canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
+      canvas.style.height = `200px`; // Fixed display height
+
+      // Set actual size in memory (scaled for high DPI)
       canvas.width = wrapperRef.current.offsetWidth * ratio;
-      canvas.height = 200 * ratio; // Fixed height, adjust as needed
+      canvas.height = 200 * ratio; 
+      
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.scale(ratio, ratio);
       }
       
-      // Restore signature data
-      pad.clear(); // Clear the pad (which also resets context transformations)
-      if (data && data !== "data:,") { // Check if data is not empty
-         // Need to re-apply context scale if SignaturePad doesn't handle it on fromDataURL
-         // This is often tricky. The library should ideally handle scaling.
-         // If not, you might need to draw image manually:
-         // const img = new Image();
-         // img.onload = () => ctx.drawImage(img, 0, 0, canvas.width/ratio, canvas.height/ratio);
-         // img.src = data;
-         // For now, assume fromDataURL works as expected or with minor issues on resize.
+      pad.clear(); 
+      if (data && data !== "data:,") {
         pad.fromDataURL(data);
       }
     }
@@ -57,16 +45,16 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
 
 
   useEffect(() => {
-    if (canvasRef.current && wrapperRef.current && SignaturePad) {
+    if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
         backgroundColor: 'rgb(255, 255, 255)', 
-        penColor: 'rgb(31, 41, 55)', 
+        penColor: 'rgb(31, 41, 55)', // text-dark color
         onBegin: () => setIsDrawing(true),
         onEnd: () => {
           setIsDrawing(false);
           if (signaturePadInstanceRef.current && !signaturePadInstanceRef.current.isEmpty()) {
-            onSignatureChange(signaturePadInstanceRef.current.toDataURL());
+            onSignatureChange(signaturePadInstanceRef.current.toDataURL('image/png')); // Specify PNG
           } else {
             onSignatureChange(null);
           }
@@ -74,17 +62,16 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       });
       signaturePadInstanceRef.current = pad;
       
-      // Initial resize
-      resizeCanvas();
+      resizeCanvas(); // Initial resize
 
       window.addEventListener('resize', resizeCanvas);
       
       return () => {
         window.removeEventListener('resize', resizeCanvas);
+        // signaturePadInstanceRef.current?.off(); // Clean up if signature_pad has an 'off' method
       };
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resizeCanvas, SignaturePad]); // Added SignaturePad to deps
+  }, [resizeCanvas]);
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
@@ -94,37 +81,27 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     }
   };
 
-  if (!SignaturePad) {
-    return (
-      <div className="border-2 border-dashed border-destructive rounded-lg p-4 text-center text-destructive bg-destructive/10">
-        <p className="font-semibold">Signature Pad Library Not Loaded</p>
-        <p className="text-sm">Please ensure 'signature_pad' is correctly installed and imported for full functionality.</p>
-        <p className="text-xs mt-2">You can still use the 'Type Signature' option.</p>
-      </div>
-    );
-  }
-
   return (
-    <div ref={wrapperRef} className="relative w-full">
+    <div ref={wrapperRef} className="relative w-full h-[200px] rounded-lg overflow-hidden border border-primary-blue-DEFAULT">
       <canvas
         ref={canvasRef}
-        className="w-full h-[200px] border border-primary-blue-focus rounded-lg cursor-crosshair touch-none bg-card"
+        className="w-full h-full cursor-crosshair touch-none bg-card-white" // Ensure canvas fills the div
         aria-label="Signature Pad"
-        style={{ touchAction: 'none' }} // Ensure touch events are captured by canvas
+        // style={{ touchAction: 'none' }} // Not needed if using touch-none utility class
       ></canvas>
       <Button
         type="button"
         variant="ghost"
         size="icon" 
         onClick={clearSignature}
-        className="absolute top-2 right-2 text-muted-foreground hover:text-destructive p-1 h-8 w-8 active:scale-90"
+        className="absolute top-2 right-2 text-text-light hover:text-destructive-DEFAULT p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full"
         aria-label="Clear Signature"
-        disabled={!isDrawing && signaturePadInstanceRef.current?.isEmpty()}
+        disabled={!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true)}
       >
         <Trash2 className="w-4 h-4" />
       </Button>
-      {!isDrawing && signaturePadInstanceRef.current?.isEmpty() && (
-         <p className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none font-body">
+      {!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true) && (
+         <p className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-text-light pointer-events-none font-body">
            Draw your signature here
          </p>
       )}
