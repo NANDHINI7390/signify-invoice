@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Edit, Check, Loader2, AlertTriangle, Trash2, FileText, UserCircle, Building } from 'lucide-react';
+import { Edit, Check, Loader2, AlertTriangle, FileText, UserCircle, Building } from 'lucide-react';
 import SignaturePadComponent from '@/components/invoice/SignaturePadComponent';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
@@ -33,6 +34,8 @@ const currencySymbols: { [key: string]: string } = {
   USD: '$',
   EUR: '€',
   GBP: '£',
+  AUD: 'A$',
+  CAD: 'C$',
 };
 
 // Mock data if no data is passed via params (for development/fallback)
@@ -117,7 +120,19 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       // And trigger PDF generation and emailing.
       // For now, we navigate to signing complete page.
       const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
-      router.push(`/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`);
+      const signatureToSend = useTextSignature ? textSignature : signatureDataUrl;
+      const signatureType = useTextSignature ? 'text' : 'draw';
+
+      let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
+      if (invoiceData) {
+        url += `&data=${encodeURIComponent(JSON.stringify(invoiceData))}`;
+      }
+      if (signatureToSend) {
+        url += `&signature=${encodeURIComponent(signatureToSend)}`;
+      }
+      url += `&signatureType=${signatureType}`;
+      
+      router.push(url);
     }, 2000);
   };
 
@@ -198,7 +213,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
                   {invoiceData.items.map((item, index) => (
                     <div key={index} className="flex justify-between text-text-light text-sm pb-1 border-b border-border/50 last:border-b-0 last:pb-0">
                       <span>{item.description} (x{item.quantity})</span>
-                      <span>{currencySymbol}{item.total.toFixed(2)}</span>
+                      <span>{currencySymbols[invoiceData.currency] || invoiceData.currency}{item.total.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -249,7 +264,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
                 value={textSignature}
                 onChange={(e) => setTextSignature(e.target.value)}
                 className="mt-1 border-primary-blue-DEFAULT focus:ring-primary-blue-DEFAULT focus:ring-2 text-xl p-4 rounded-lg input-focus-glow min-h-[56px]"
-                style={{ fontFamily: 'cursive', fontSize: '1.5rem' }} // "Elegant" font as per PRD
+                style={{ fontFamily: 'cursive', fontSize: '1.5rem' }}
               />
               {textSignature && <p className="mt-2 text-sm text-text-light">Preview: <span className="font-medium" style={{ fontFamily: 'cursive', fontSize: '1.2rem' }}>{textSignature}</span></p>}
             </div>
@@ -290,3 +305,4 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
+
