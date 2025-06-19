@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -9,7 +10,7 @@ interface SignaturePadComponentProps {
   onSignatureChange: (dataUrl: string | null) => void;
 }
 
-const MIN_MEANINGFUL_DATA_URL_LENGTH = 150; // For PNG, after 'data:image/png;base64,'
+const MIN_MEANINGFUL_DATA_URL_LENGTH = 150; // Arbitrary threshold for a non-trivial PNG
 
 export default function SignaturePadComponent({ onSignatureChange }: SignaturePadComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,7 +94,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)', // Draw on transparent background
+        backgroundColor: 'rgba(255, 255, 255, 0)', // Draw on transparent background for original
         penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75, 
         maxWidth: 2.5, 
@@ -115,6 +116,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       
       window.addEventListener('resize', resizeCanvas);
       
+      // Initial check, e.g., if there's pre-loaded data (not implemented here, but good practice)
       const initialTimeout = setTimeout(() => updateSignatureState(), 50);
 
       return () => {
@@ -124,7 +126,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []); // updateSignatureState is memoized, resizeCanvas depends on it
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
@@ -138,7 +140,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50"
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50" // bg-gray-50 for slight contrast
       style={{ touchAction: 'none' }} 
     >
       <canvas

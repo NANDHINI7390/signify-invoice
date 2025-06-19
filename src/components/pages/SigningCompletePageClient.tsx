@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -86,13 +87,14 @@ export default function SigningCompletePageClient() {
 
   useEffect(() => {
     const dataString = searchParams.get('data');
-    const sigType = searchParams.get('signatureType') as 'draw' | 'text' | null;
+    const sigTypeParam = searchParams.get('signatureType') as 'draw' | 'text' | null;
     const signedAtParam = searchParams.get('signedAt');
     const signedUserAgentParam = searchParams.get('signedUserAgent');
 
     let sigValue: string | null = null;
+    setSignatureType(sigTypeParam);
 
-    if (sigType === 'draw') {
+    if (sigTypeParam === 'draw') {
       try {
         sigValue = localStorage.getItem(TEMP_DRAWN_SIGNATURE_KEY);
         if (sigValue) {
@@ -100,13 +102,13 @@ export default function SigningCompletePageClient() {
           localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); 
         } else {
           console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
-          setError("Drawn signature data not found. It might have been cleared or not saved correctly.");
+          // Don't set error here yet, let the common checks handle it
         }
       } catch (e) {
         console.error('SigningCompletePageClient useEffect: Error accessing localStorage for signature', e);
         setError("Failed to retrieve drawn signature data.");
       }
-    } else if (sigType === 'text') {
+    } else if (sigTypeParam === 'text') {
       const tempSigValueFromParam = searchParams.get('signature');
       if (tempSigValueFromParam) {
         sigValue = decodeURIComponent(tempSigValueFromParam);
@@ -116,7 +118,7 @@ export default function SigningCompletePageClient() {
       }
     }
     
-    console.log('SigningCompletePageClient useEffect: sigType:', sigType, 'sigValue (prefix & length):', sigValue ? sigValue.substring(0,50) + '...' : null, sigValue ? sigValue.length : 0);
+    console.log('SigningCompletePageClient useEffect: sigTypeParam:', sigTypeParam, 'sigValue (prefix & length):', sigValue ? sigValue.substring(0,50) + '...' : null, sigValue ? sigValue.length : 0);
 
     if (dataString) {
       try {
@@ -138,19 +140,18 @@ export default function SigningCompletePageClient() {
     } else {
         console.log('SigningCompletePageClient useEffect: sigValue is blank, too short, or null. Setting signature to null. Actual sigValue prefix:', sigValue ? sigValue.substring(0,30) : "null");
         setSignature(null); 
-        if (sigType === 'draw' && !sigValue && !error) { 
-          setError("Drawn signature data not found after signing. It might have been cleared or not saved correctly.");
+        if (sigTypeParam && !sigValue && !error) { 
+          setError(`Signature data not found after signing. It might have been cleared or not saved correctly for ${sigTypeParam} signature.`);
         } else if (sigValue && !error && (sigValue === BLANK_IMAGE_DATA_URL || sigValue.length <= MIN_DATA_URL_LENGTH)) { 
-           setError(`Invalid or empty ${sigType} signature data received.`);
+           setError(`Invalid or empty ${sigTypeParam} signature data received.`);
         }
     }
     
-    if (sigType) setSignatureType(sigType);
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]); 
+  }, [searchParams]); // Only searchParams
 
 
   useEffect(() => {
@@ -263,7 +264,7 @@ export default function SigningCompletePageClient() {
       const addWrappedText = (text: string, x: number, currentYPos: number, maxWidth: number, spacing: number): number => {
         let localYPos = currentYPos;
         const lines = doc.splitTextToSize(text, maxWidth);
-        lines.forEach((line: string) {
+        lines.forEach((line: string) => {
           if (localYPos > pageHeight - margin - spacing) { doc.addPage(); localYPos = margin; }
           doc.text(line, x, localYPos);
           localYPos += spacing;
@@ -389,6 +390,8 @@ export default function SigningCompletePageClient() {
             let errorText = "[Signature Data Invalid or Unsupported Format]";
             if(signatureType === 'draw' && !signature.startsWith('data:image/png;base64,')) {
                 errorText = "[Drawn Signature Data Not PNG Format]";
+            } else if (signatureType === 'draw') {
+                errorText = "[Drawn Signature Data Appears Invalid]";
             }
             addText(errorText, margin, yPos); 
             console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");

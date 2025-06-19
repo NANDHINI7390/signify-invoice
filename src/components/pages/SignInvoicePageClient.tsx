@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -46,7 +47,7 @@ const mockInvoiceFallback: InvoiceData = {
 };
 
 const BLANK_IMAGE_DATA_URL = 'data:,'; 
-const MIN_DATA_URL_LENGTH = 150; 
+const MIN_DATA_URL_LENGTH = 150; // Min length for a meaningful PNG data URL
 const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
@@ -168,7 +169,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     const signedAt = new Date().toISOString();
     const signedUserAgent = navigator.userAgent;
     const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
-    const signatureTypeParam = useTextSignature ? 'text' : 'draw';
         
     if (!useTextSignature && isDrawSignatureActuallyMeaningful && signatureDataUrl) {
       try {
@@ -192,7 +192,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         return;
     }
     
-    console.log('SignInvoicePageClient: Preparing to navigate. Drawn signature (if any) stored in localStorage.');
+    console.log('SignInvoicePageClient: Preparing to navigate.');
 
     setTimeout(() => {
       setIsLoading(false);
@@ -207,7 +207,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         url += `&signature=${encodeURIComponent(textSignature.trim())}`;
       }
       
-      url += `&signatureType=${signatureTypeParam}`;
+      url += `&signatureType=${useTextSignature ? 'text' : 'draw'}`;
       url += `&signedAt=${encodeURIComponent(signedAt)}`;
       url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
       
