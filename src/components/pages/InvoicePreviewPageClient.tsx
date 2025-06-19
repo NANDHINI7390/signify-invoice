@@ -109,7 +109,7 @@ export default function InvoicePreviewPageClient() {
         }
         setIsSending(false);
       }, 1500);
-      return; // Added missing return statement
+      return;
     }
 
     try {
