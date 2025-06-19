@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,6 +18,7 @@ import { Calendar as CalendarIcon, User, Mail, MapPin, Phone, Hash, DollarSign, 
 import { useRouter } from 'next/navigation';
 import { suggestInvoiceItems, type SuggestInvoiceItemsInput } from '@/ai/flows/suggest-invoice-items';
 import { toast } from '@/hooks/use-toast';
+import emailjs from '@emailjs/browser';
 
 const invoiceSchema = z.object({
   senderName: z.string().min(1, 'Your name is required.'),
@@ -36,13 +38,16 @@ const invoiceSchema = z.object({
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
 
-// Mock previous entries for AI suggestions
 const mockPreviousInvoiceItems: string[] = [
   "Web Design Services - 50 hours",
   "Consulting - Project Alpha",
   "Monthly Retainer - SEO Services",
   "Graphic Design - Logo and Branding Package",
 ];
+
+const EMAILJS_PUBLIC_KEY = 'fg1f_KwO_bzZFYk9G';
+const EMAILJS_SERVICE_ID = 'YOUR_EMAILJS_SERVICE_ID'; // <-- IMPORTANT: Replace with your Service ID
+const EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID'; // <-- IMPORTANT: Replace with your Template ID
 
 
 export default function CreateInvoicePageClient() {
@@ -51,6 +56,7 @@ export default function CreateInvoicePageClient() {
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState('');
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSending, setIsSending] = useState(false);
 
   const { register, handleSubmit, control, formState: { errors }, watch, setValue } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -62,7 +68,6 @@ export default function CreateInvoicePageClient() {
   const currentDescription = watch('invoiceDescription');
 
   useEffect(() => {
-    // Auto-generate invoice number with typewriter effect (simplified)
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const newInvoiceNumberValue = `INV-${new Date().getFullYear()}-${randomNum}`;
     
@@ -70,21 +75,62 @@ export default function CreateInvoicePageClient() {
     const typeEffect = setInterval(() => {
       setCurrentInvoiceNumber(newInvoiceNumberValue.substring(0, i + 1));
       i++;
-      if (i >= newInvoiceNumberValue.length) { // Changed to >= to ensure full string
+      if (i >= newInvoiceNumberValue.length) {
         clearInterval(typeEffect);
-        setValue('invoiceNumber', newInvoiceNumberValue); // Set final value for form
+        setValue('invoiceNumber', newInvoiceNumberValue);
       }
     }, 50);
     return () => clearInterval(typeEffect);
   }, [setValue]);
 
-  const onSubmit = (data: InvoiceFormData) => {
-    console.log('Invoice Data:', data);
-    setProgress(100);
+  const onSubmit = async (data: InvoiceFormData) => {
+    setIsSending(true);
+    setProgress(66);
     toast({ title: "Processing...", description: "Sending invoice for signature." });
-    setTimeout(() => {
+
+    const templateParams = {
+      to_email: data.recipientEmail,
+      to_name: data.recipientName,
+      from_name: data.senderName,
+      from_email: data.senderEmail,
+      invoice_link: `${window.location.origin}/sign-invoice/${data.invoiceNumber}`,
+      invoice_number: data.invoiceNumber,
+      invoice_date: format(data.invoiceDate, 'PPP'),
+      invoice_description: data.invoiceDescription,
+      invoice_amount: data.amount.toFixed(2),
+      sender_address: data.senderAddress || 'N/A',
+      sender_phone: data.senderPhone || 'N/A',
+    };
+
+    try {
+      if (EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID' || EMAILJS_TEMPLATE_ID === 'YOUR_EMAILJS_TEMPLATE_ID') {
+        toast({
+          variant: "destructive",
+          title: "EmailJS Not Configured",
+          description: "Please replace placeholder Service ID and Template ID in CreateInvoicePageClient.tsx with your actual EmailJS values.",
+          duration: 10000,
+        });
+        // Simulate sending for testing if not configured
+        console.warn("EmailJS not configured. Simulating email send for navigation.");
+        setTimeout(() => {
+          setProgress(100);
+          router.push('/email-sent?recipientEmail=' + encodeURIComponent(data.recipientEmail));
+          setIsSending(false);
+        }, 1500);
+        return;
+      }
+
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_PUBLIC_KEY);
+      toast({ title: "Invoice Sent!", description: "The invoice has been successfully emailed for signature." });
+      setProgress(100);
       router.push('/email-sent?recipientEmail=' + encodeURIComponent(data.recipientEmail));
-    }, 1500);
+    } catch (error) {
+      console.error('EmailJS send error:', error);
+      toast({ variant: "destructive", title: "Email Send Failed", description: "Could not send the invoice email. Please check your EmailJS configuration or try again later." });
+      setProgress(33); // Reset progress or handle appropriately
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleSuggestDescription = async () => {
@@ -292,8 +338,16 @@ export default function CreateInvoicePageClient() {
         <Button 
           type="submit" 
           className="w-full text-lg py-3 gradient-button-green-blue text-white font-semibold rounded-lg shadow-button-hover hover:transform hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+          disabled={isSending}
         >
-          Send for Signature <Send className="ml-2 w-5 h-5" />
+          {isSending ? (
+            <><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg> Sending...</>
+          ) : (
+            <><Send className="ml-2 w-5 h-5" /> Send for Signature</>
+          )}
         </Button>
       </form>
     </div>
