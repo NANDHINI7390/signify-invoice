@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -66,9 +65,6 @@ export default function SigningCompletePageClient() {
 
     if (sigString) {
       setSignature(decodeURIComponent(sigString));
-    } else {
-        // setError("Signature data not found."); // Potentially too noisy if signature can be optional for viewing
-        // toast({ variant: "destructive", title: "Data Error", description: "Signature data not found." });
     }
     if (sigType) {
       setSignatureType(sigType);
@@ -104,26 +100,24 @@ export default function SigningCompletePageClient() {
     });
 
     try {
-      const doc = new jsPDF();
+      const doc = new jsPDF({ compress: true });
       const pageHeight = doc.internal.pageSize.height;
       let yPos = 20;
       const lineSpacing = 7;
+      const smallLineSpacing = 5;
       const sectionSpacing = 10;
-      // const indent = 25; // Not used currently
-      const margin = 20;
+      const margin = 15; // Reduced margin slightly for more space
       const contentWidth = doc.internal.pageSize.width - 2 * margin;
 
       const addText = (text: string, x: number, y: number, options?: any) => {
-        // This yPos update logic should be within the calling scope, not addText directly, 
-        // or addText should return new yPos. For now, manage yPos outside.
         doc.text(text, x, y, options);
-      }
+      };
       
       const addWrappedText = (text: string, x: number, currentYPos: number, maxWidth: number, spacing: number): number => {
         let localYPos = currentYPos;
         const lines = doc.splitTextToSize(text, maxWidth);
         lines.forEach((line: string) => {
-          if (localYPos > pageHeight - margin - spacing) { // Check space for current line
+          if (localYPos > pageHeight - margin - spacing) {
             doc.addPage();
             localYPos = margin;
           }
@@ -133,65 +127,57 @@ export default function SigningCompletePageClient() {
         return localYPos;
       };
 
-
-      doc.setFontSize(22);
+      // Header
+      doc.setFontSize(20);
       doc.setFont("helvetica", "bold");
       addText("Signed Invoice", margin, yPos);
-      yPos += sectionSpacing * 1.5;
+      yPos += sectionSpacing * 1.2;
 
-      doc.setLineWidth(0.5);
+      doc.setLineWidth(0.3);
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
       
-      doc.setFontSize(12);
+      doc.setFontSize(10); // Reduced base font size for more content fit
       doc.setFont("helvetica", "normal");
 
       // Sender and Recipient
       const senderX = margin;
-      const recipientX = doc.internal.pageSize.width / 2 + 10; // Start recipient details slightly to the right
+      const recipientX = doc.internal.pageSize.width / 2 + 5; 
       let currentSectionYPos = yPos;
       let senderBlockHeight = 0;
       let recipientBlockHeight = 0;
 
-      // Calculate Sender Block
       let tempY = currentSectionYPos;
       doc.setFont("helvetica", "bold");
       addText("FROM:", senderX, tempY);
       tempY += lineSpacing;
       doc.setFont("helvetica", "normal");
       addText(invoiceData.senderName, senderX, tempY);
-      tempY += lineSpacing;
+      tempY += smallLineSpacing;
       addText(invoiceData.senderEmail, senderX, tempY);
-      tempY += lineSpacing;
+      tempY += smallLineSpacing;
       if (invoiceData.senderAddress) {
-        const addressLines = doc.splitTextToSize(invoiceData.senderAddress, contentWidth / 2 - 10);
-        addressLines.forEach((line: string) => {
-            if (tempY > pageHeight - margin - lineSpacing) { doc.addPage(); tempY = margin; }
-            addText(line, senderX, tempY); tempY+=lineSpacing;
-        });
+        tempY = addWrappedText(invoiceData.senderAddress, senderX, tempY, contentWidth / 2 - 10, smallLineSpacing);
       }
       if (invoiceData.senderPhone) {
-        if (tempY > pageHeight - margin - lineSpacing) { doc.addPage(); tempY = margin; }
+        if (tempY > pageHeight - margin - smallLineSpacing) { doc.addPage(); tempY = margin; }
         addText(invoiceData.senderPhone, senderX, tempY);
-        tempY += lineSpacing;
+        tempY += smallLineSpacing;
       }
       senderBlockHeight = tempY - currentSectionYPos;
 
-      // Calculate Recipient Block
-      tempY = currentSectionYPos; // Reset tempY for recipient block
+      tempY = currentSectionYPos; 
       doc.setFont("helvetica", "bold");
       addText("TO:", recipientX, tempY);
       tempY += lineSpacing;
       doc.setFont("helvetica", "normal");
       addText(invoiceData.recipientName, recipientX, tempY);
-      tempY += lineSpacing;
+      tempY += smallLineSpacing;
       addText(invoiceData.recipientEmail, recipientX, tempY);
-      // No address/phone for recipient in current data model
       recipientBlockHeight = tempY - currentSectionYPos;
       
       yPos = currentSectionYPos + Math.max(senderBlockHeight, recipientBlockHeight);
       
-      // Check if new page is needed after sender/recipient block
       if (yPos > pageHeight - margin - sectionSpacing) {
         doc.addPage();
         yPos = margin;
@@ -199,21 +185,23 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing;
       }
 
-
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
 
       doc.setFont("helvetica", "bold");
       addText("Invoice Number:", margin, yPos);
       doc.setFont("helvetica", "normal");
-      addText(invoiceData.invoiceNumber, margin + 45, yPos);
-      yPos += lineSpacing;
+      addText(invoiceData.invoiceNumber, margin + 40, yPos); // Adjusted X offset
       
+      const dateLabel = "Invoice Date:";
+      const formattedDate = format(new Date(invoiceData.invoiceDate), 'PPP');
+      const dateXPos = doc.internal.pageSize.width - margin - doc.getTextWidth(formattedDate) - doc.getTextWidth(dateLabel) - 5;
       doc.setFont("helvetica", "bold");
-      addText("Invoice Date:", margin, yPos);
+      addText(dateLabel, dateXPos, yPos);
       doc.setFont("helvetica", "normal");
-      addText(format(new Date(invoiceData.invoiceDate), 'PPP'), margin + 45, yPos);
-      yPos += sectionSpacing;
+      addText(formattedDate, dateXPos + doc.getTextWidth(dateLabel) + 2, yPos);
+      yPos += lineSpacing;
+      yPos += sectionSpacing / 2;
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
@@ -222,7 +210,7 @@ export default function SigningCompletePageClient() {
       addText("Description:", margin, yPos);
       yPos += lineSpacing;
       doc.setFont("helvetica", "normal");
-      yPos = addWrappedText(invoiceData.invoiceDescription, margin, yPos, contentWidth, lineSpacing);
+      yPos = addWrappedText(invoiceData.invoiceDescription, margin, yPos, contentWidth, smallLineSpacing);
       yPos += sectionSpacing/2; 
 
       if (invoiceData.items && invoiceData.items.length > 0) {
@@ -234,12 +222,12 @@ export default function SigningCompletePageClient() {
         yPos += lineSpacing;
         doc.setFont("helvetica", "normal");
         invoiceData.items.forEach(item => {
-            if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
+            if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
             const itemText = `${item.description} (x${item.quantity})`;
             const itemTotal = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${item.total.toFixed(2)}`;
-            addText(itemText, margin + 5, yPos);
+            addText(itemText, margin + 2, yPos); // Small indent for items
             addText(itemTotal, doc.internal.pageSize.width - margin - doc.getTextWidth(itemTotal), yPos);
-            yPos += lineSpacing;
+            yPos += smallLineSpacing;
         });
         yPos += sectionSpacing;
       }
@@ -248,50 +236,60 @@ export default function SigningCompletePageClient() {
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
 
-      doc.setFontSize(16);
+      // Total Amount - Smaller Font
+      doc.setFontSize(12); // Reduced from 16
       doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
-      addText("Total Amount:", margin, yPos);
-      const amountText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${invoiceData.currency})`;
-      addText(amountText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountText), yPos);
-      yPos += sectionSpacing * 1.5;
+      addText("TOTAL AMOUNT:", margin, yPos);
+      
+      const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      doc.setFontSize(14); // Slightly larger for the amount itself
+      addText(amountValueText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountValueText) - doc.getTextWidth(` (${invoiceData.currency})`) - 2 , yPos);
+      
+      doc.setFontSize(10); // Smaller for currency code
+      doc.setFont("helvetica", "normal");
+      addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - doc.getTextWidth(` (${invoiceData.currency})`), yPos);
+      
+      yPos += sectionSpacing * 1.2; // Adjusted spacing
       
       if (yPos > pageHeight - margin - sectionSpacing) { doc.addPage(); yPos = margin; }
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
       
-      doc.setFontSize(12);
+      doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      if (yPos > pageHeight - margin - (lineSpacing*2)) { doc.addPage(); yPos = margin; }
+      if (yPos > pageHeight - margin - (smallLineSpacing*2)) { doc.addPage(); yPos = margin; }
       addText(`Signed by: ${invoiceData.recipientName}`, margin, yPos);
-      yPos += lineSpacing;
+      yPos += smallLineSpacing;
       addText(`Date Signed: ${format(new Date(), 'PPP')}`, margin, yPos);
       yPos += sectionSpacing;
 
       doc.setFont("helvetica", "bold");
-      if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
+      if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
       addText("Signature:", margin, yPos);
-      yPos += lineSpacing;
+      yPos += smallLineSpacing;
 
       if (signature) {
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
-          const imgWidth = 80; 
-          const imgHeight = 40; 
+          const imgWidth = 60; // Reduced image size
+          const imgHeight = 30; 
           if (yPos + imgHeight > pageHeight - margin) { 
             doc.addPage();
             yPos = margin;
           }
           doc.addImage(signature, 'PNG', margin, yPos, imgWidth, imgHeight);
-          yPos += imgHeight + lineSpacing;
+          yPos += imgHeight + smallLineSpacing;
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); 
-          if (yPos > pageHeight - margin - (lineSpacing*2)) { doc.addPage(); yPos = margin; }
-          yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.5); 
+          doc.setFontSize(12); // Text signature size
+          if (yPos > pageHeight - margin - (lineSpacing*1.5)) { doc.addPage(); yPos = margin; }
+          yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.2); 
         }
       } else {
-        if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
+        if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
+        doc.setFont("helvetica", "italic");
         addText("[Signature Not Provided]", margin, yPos);
-        yPos += lineSpacing;
+        yPos += smallLineSpacing;
       }
       
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
@@ -330,7 +328,6 @@ export default function SigningCompletePageClient() {
     );
   }
 
-
   return (
     <div 
       className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center relative py-10 px-4"
@@ -366,7 +363,7 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData || (!signature && signatureType !== 'text')} 
+          disabled={!invoiceData} 
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
@@ -377,4 +374,3 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
-

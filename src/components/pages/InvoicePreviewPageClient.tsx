@@ -1,17 +1,15 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Edit, Send, AlertTriangle, Loader2, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ArrowLeft, Edit, Send, AlertTriangle, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import emailjs from '@emailjs/browser';
 
-// Values for these will be set in Vercel's environment variables settings
 const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
 const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
 const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
@@ -51,7 +49,6 @@ export default function InvoicePreviewPageClient() {
       const dataString = searchParams.get('data');
       if (dataString) {
         const decodedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
-        // Ensure amount is a number
         decodedData.amount = parseFloat(String(decodedData.amount));
         setInvoiceData(decodedData);
       } else {
@@ -67,7 +64,6 @@ export default function InvoicePreviewPageClient() {
 
   const handleEdit = () => {
     if (invoiceData) {
-      // Pass data back to create page for editing
       const query = encodeURIComponent(JSON.stringify(invoiceData));
       router.push(`/create-invoice?editData=${query}`);
     }
@@ -84,13 +80,11 @@ export default function InvoicePreviewPageClient() {
     const formattedDate = invoiceData.invoiceDate ? format(new Date(invoiceData.invoiceDate), 'PPP') : 'N/A';
     const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
 
-
     const templateParams = {
       to_email: invoiceData.recipientEmail,
       to_name: invoiceData.recipientName,
       from_name: invoiceData.senderName,
       from_email: invoiceData.senderEmail,
-      // Ensure this link is correctly formed and used in your EmailJS template
       invoice_link: `${window.location.origin}/sign-invoice/${encodeURIComponent(invoiceData.invoiceNumber)}?data=${encodeURIComponent(JSON.stringify(invoiceData))}`,
       invoice_number: invoiceData.invoiceNumber,
       invoice_date: formattedDate,
@@ -100,32 +94,24 @@ export default function InvoicePreviewPageClient() {
       sender_phone: invoiceData.senderPhone || 'N/A',
     };
     
-    // Log the parameters to help debug the link
-    console.log("EmailJS Template Parameters:", templateParams);
-    console.log("Using EmailJS Service ID:", EMAILJS_SERVICE_ID);
-    console.log("Using EmailJS Template ID:", EMAILJS_TEMPLATE_ID);
-    console.log("Using EmailJS Public Key:", EMAILJS_PUBLIC_KEY ? "Set" : "Not Set");
-
+    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+       toast({
+        variant: "destructive",
+        title: "EmailJS Not Fully Configured",
+        description: "EmailJS environment variables are not set. Please configure them in Vercel or your .env.local file.",
+        duration: 7000,
+      });
+      console.warn("EmailJS not fully configured. Check Vercel environment variables or .env.local: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
+      setTimeout(() => {
+        router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
+        setIsSending(false);
+      }, 1500);
+      return;
+    }
 
     try {
-      if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-         toast({
-          variant: "destructive",
-          title: "EmailJS Not Fully Configured",
-          description: "EmailJS environment variables (service, template, public key) are not set in Vercel.",
-          duration: 7000,
-        });
-        console.warn("EmailJS not fully configured. Check Vercel environment variables: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
-        // Simulating email send for navigation if keys are missing (useful for local dev if .env.local isn't set up)
-        setTimeout(() => {
-          router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
-          setIsSending(false);
-        }, 1500);
-        return;
-      }
-
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_PUBLIC_KEY);
-      toast({ title: "Invoice Sent!", description: "The invoice has been successfully emailed for signature.", className: "bg-success-green-DEFAULT text-white" });
+      toast({ variant: "success", title: "Invoice Sent!", description: "The invoice has been successfully emailed for signature." });
       router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
     } catch (emailError) {
       console.error('EmailJS send error:', emailError);
@@ -138,7 +124,7 @@ export default function InvoicePreviewPageClient() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
-        <AlertTriangle className="w-16 h-16 text-destructive-DEFAULT mb-4" />
+        <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
         <h1 className="text-2xl font-bold text-text-dark mb-2">Error Loading Preview</h1>
         <p className="text-text-light mb-6">{error}</p>
         <Button onClick={() => router.push('/create-invoice')}>
@@ -151,7 +137,7 @@ export default function InvoicePreviewPageClient() {
   if (!invoiceData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-blue-DEFAULT" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-4 text-text-light">Loading invoice preview...</p>
       </div>
     );
@@ -165,88 +151,82 @@ export default function InvoicePreviewPageClient() {
         <ArrowLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to Form
       </Button>
 
-      <Card className="bg-card-white shadow-card-shadow rounded-xl overflow-hidden">
-        <CardHeader className="bg-primary-blue-DEFAULT/5 p-6">
-          <CardTitle className="text-3xl font-headline text-primary-blue-DEFAULT text-center">Invoice Preview</CardTitle>
-          <CardDescription className="text-text-light text-center font-body">Review the invoice details below before sending.</CardDescription>
+      <Card className="bg-card shadow-card-shadow rounded-xl overflow-hidden">
+        <CardHeader className="bg-primary/5 p-6">
+          <CardTitle className="text-3xl font-headline text-primary text-center">Invoice Preview</CardTitle>
+          <CardDescription className="text-muted-foreground text-center font-body">Review the invoice details below before sending.</CardDescription>
         </CardHeader>
         <CardContent className="p-6 md:p-8 space-y-6 font-body">
-          {/* Sender & Recipient Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6">
             <div>
-              <h3 className="font-semibold text-text-dark mb-1 text-sm">FROM:</h3>
-              <p className="text-text-light">{invoiceData.senderName}</p>
-              <p className="text-text-light">{invoiceData.senderEmail}</p>
-              {invoiceData.senderAddress && <p className="text-text-light text-xs">{invoiceData.senderAddress}</p>}
-              {invoiceData.senderPhone && <p className="text-text-light text-xs">{invoiceData.senderPhone}</p>}
+              <h3 className="font-semibold text-foreground mb-1 text-sm">FROM:</h3>
+              <p className="text-muted-foreground">{invoiceData.senderName}</p>
+              <p className="text-muted-foreground">{invoiceData.senderEmail}</p>
+              {invoiceData.senderAddress && <p className="text-muted-foreground text-xs">{invoiceData.senderAddress}</p>}
+              {invoiceData.senderPhone && <p className="text-muted-foreground text-xs">{invoiceData.senderPhone}</p>}
             </div>
             <div className="md:text-right">
-              <h3 className="font-semibold text-text-dark mb-1 text-sm">TO:</h3>
-              <p className="text-text-light">{invoiceData.recipientName}</p>
-              <p className="text-text-light">{invoiceData.recipientEmail}</p>
+              <h3 className="font-semibold text-foreground mb-1 text-sm">TO:</h3>
+              <p className="text-muted-foreground">{invoiceData.recipientName}</p>
+              <p className="text-muted-foreground">{invoiceData.recipientEmail}</p>
             </div>
           </div>
           
           <Separator />
 
-          {/* Invoice Meta */}
           <div className="flex justify-between items-center text-sm">
             <div>
-              <span className="font-semibold text-text-dark">Invoice #: </span>
-              <span className="text-text-light">{invoiceData.invoiceNumber}</span>
+              <span className="font-semibold text-foreground">Invoice #: </span>
+              <span className="text-muted-foreground">{invoiceData.invoiceNumber}</span>
             </div>
             <div>
-              <span className="font-semibold text-text-dark">Date: </span>
-              <span className="text-text-light">{format(new Date(invoiceData.invoiceDate), 'PPP')}</span>
+              <span className="font-semibold text-foreground">Date: </span>
+              <span className="text-muted-foreground">{format(new Date(invoiceData.invoiceDate), 'PPP')}</span>
             </div>
           </div>
           
           <Separator />
 
-          {/* Description */}
           <div>
-            <h3 className="font-semibold text-text-dark mb-2">Description:</h3>
-            <p className="text-text-light whitespace-pre-wrap p-3 bg-background-gray rounded-md text-sm">{invoiceData.invoiceDescription}</p>
+            <h3 className="font-semibold text-foreground mb-2">Description:</h3>
+            <p className="text-muted-foreground whitespace-pre-wrap p-3 bg-background rounded-md text-sm">{invoiceData.invoiceDescription}</p>
           </div>
           
           <Separator />
           
-          {/* Amount */}
           <div className="text-right space-y-1">
-            <p className="text-text-dark text-lg">Total Amount:</p>
-            <p className="text-success-green-DEFAULT font-bold text-3xl md:text-4xl font-headline">
+            <p className="text-foreground text-lg">Total Amount:</p>
+            <p className="text-accent font-bold text-3xl md:text-4xl font-headline">
               {currencySymbol}{invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-text-light text-xs">({invoiceData.currency})</p>
+            <p className="text-muted-foreground text-xs">({invoiceData.currency})</p>
           </div>
 
         </CardContent>
       </Card>
 
-      {/* Action Section */}
-      <Card className="mt-8 bg-card-white shadow-card-shadow rounded-xl">
+      <Card className="mt-8 bg-card shadow-card-shadow rounded-xl">
         <CardHeader>
-            <h2 className="text-xl font-modern-sans text-text-dark text-center">Ready to send for signature?</h2>
+            <h2 className="text-xl font-modern-sans text-foreground text-center">Ready to send for signature?</h2>
         </CardHeader>
         <CardContent className="text-center">
-            <p className="text-text-light mb-1">This invoice will be sent to:</p>
-            <p className="font-semibold text-primary-blue-DEFAULT mb-6">{invoiceData.recipientEmail}</p>
+            <p className="text-muted-foreground mb-1">This invoice will be sent to:</p>
+            <p className="font-semibold text-primary mb-6">{invoiceData.recipientEmail}</p>
         
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button variant="outline" onClick={handleEdit} className="min-h-[44px] group transition-all hover:shadow-md active:scale-95 border-primary-blue-DEFAULT text-primary-blue-DEFAULT hover:bg-primary-blue-DEFAULT/10">
+            <Button variant="outline" onClick={handleEdit} className="group transition-all hover:shadow-md active:scale-95 border-primary text-primary hover:bg-primary/10 px-6 py-3 text-base">
               <Edit className="mr-2 h-4 w-4 group-hover:rotate-[-10deg] transition-transform" /> Edit Invoice
             </Button>
             <Button 
               onClick={handleSendInvoice} 
               disabled={isSending}
-              className="min-h-[44px] bg-success-green-DEFAULT hover:bg-success-green-dark text-white font-semibold rounded-lg shadow-button-hover-green transform hover:-translate-y-0.5 transition-all duration-300 active:scale-95"
+              className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-lg shadow-button-hover-green transform hover:-translate-y-0.5 transition-all duration-300 active:scale-95 flex items-center justify-center px-6 py-3 text-base"
             >
               {isSending ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
-                <Send className="mr-2 h-5 w-5" />
-              )}
-              {isSending ? 'Sending...' : 'Confirm & Send Signing Link'}
+                <Send className="mr-2 h-5 w-5" />}
+              {isSending ? 'Sending...' : 'Confirm &amp; Send Signing Link'}
             </Button>
           </div>
         </CardContent>
@@ -254,4 +234,3 @@ export default function InvoicePreviewPageClient() {
     </div>
   );
 }
-
