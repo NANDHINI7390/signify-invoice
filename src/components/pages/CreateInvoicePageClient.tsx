@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -13,6 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, User, Mail, MapPin, Phone, Hash, DollarSign, Edit3, Eye, Sparkles, AlertTriangle, Check, Info } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -50,6 +52,8 @@ const currencyOptions = [
   { value: 'USD', label: '$ USD (US Dollar)' },
   { value: 'EUR', label: '€ EUR (Euro)' },
   { value: 'GBP', label: '£ GBP (British Pound)' },
+  { value: 'AUD', label: 'A$ AUD (Australian Dollar)' },
+  { value: 'CAD', label: 'C$ CAD (Canadian Dollar)' },
 ];
 
 export default function CreateInvoicePageClient() {
@@ -87,6 +91,9 @@ export default function CreateInvoicePageClient() {
           parsedData.invoiceDate = new Date(parsedData.invoiceDate);
         }
         reset(parsedData); // Populate form with edit data
+        const selectedOpt = currencyOptions.find(opt => opt.value === parsedData.currency);
+        if (selectedOpt) setSelectedCurrencySymbol(selectedOpt.label.charAt(0));
+
       } catch (e) {
         console.error("Failed to parse edit data:", e);
         toast({ variant: "destructive", title: "Error", description: "Could not load data for editing." });
@@ -117,7 +124,7 @@ export default function CreateInvoicePageClient() {
 
   // Typewriter for Invoice Number
   useEffect(() => {
-    if (watchedFields.invoiceNumber) { // If editing, use existing number
+    if (watchedFields.invoiceNumber && searchParams.get('editData')) { // If editing, use existing number
         setCurrentInvoiceNumber(watchedFields.invoiceNumber);
         return;
     }
@@ -130,12 +137,12 @@ export default function CreateInvoicePageClient() {
       i++;
       if (i >= newInvoiceNumberValue.length) {
         clearInterval(typeEffect);
-        setValue('invoiceNumber', newInvoiceNumberValue, { shouldDirty: true });
+        setValue('invoiceNumber', newInvoiceNumberValue, { shouldDirty: true, shouldValidate: true });
       }
     }, 30); // Faster typing
     return () => clearInterval(typeEffect);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setValue, watchedFields.invoiceNumber]); // Only re-run if invoiceNumber changes externally (e.g. edit mode)
+  }, [setValue, searchParams]); 
 
   const onSubmit: SubmitHandler<InvoiceFormData> = (data) => {
     // Navigate to preview page with data
@@ -174,6 +181,12 @@ export default function CreateInvoicePageClient() {
     setSelectedCurrencySymbol(option ? option.label.charAt(0) : '');
   };
 
+  const checkFieldCompletion = (fieldName: keyof InvoiceFormData) => {
+    if (errors[fieldName]) return 'border-destructive-DEFAULT focus:border-destructive-DEFAULT ring-destructive-DEFAULT';
+    if (touchedFields[fieldName] && !errors[fieldName]) return 'border-success-green-DEFAULT focus:border-success-green-DEFAULT ring-success-green-DEFAULT';
+    return 'border-input focus:border-primary-blue-DEFAULT ring-primary-blue-DEFAULT';
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-8 animate-fadeIn">
       <div className="mb-8">
@@ -198,7 +211,7 @@ export default function CreateInvoicePageClient() {
               { id: 'senderAddress', label: 'Your Address (Optional)', type: 'text', icon: MapPin },
               { id: 'senderPhone', label: 'Your Phone (Optional)', type: 'tel', icon: Phone },
             ].map(field => (
-              <div key={field.id} className="space-y-1.5">
+              <div key={field.id} className="space-y-1.5 relative">
                 <Label htmlFor={field.id} className="flex items-center text-text-dark font-body text-sm">
                   <field.icon className="w-4 h-4 mr-2 text-primary-blue-DEFAULT" />
                   {field.label} {field.required && <span className="text-destructive-DEFAULT ml-1">*</span>}
@@ -207,10 +220,13 @@ export default function CreateInvoicePageClient() {
                   id={field.id}
                   type={field.type}
                   {...register(field.id as keyof InvoiceFormData)}
-                  className="bg-card-white input-focus-glow font-body"
+                  className={`bg-card-white input-focus-glow font-body ${checkFieldCompletion(field.id as keyof InvoiceFormData)}`}
                   aria-invalid={errors[field.id as keyof InvoiceFormData] ? "true" : "false"}
                   placeholder={field.type === 'email' ? 'you@example.com' : field.type === 'tel' ? '+1 234 567 8900' : `Enter ${field.label.toLowerCase()}`}
                 />
+                 {touchedFields[field.id as keyof InvoiceFormData] && !errors[field.id as keyof InvoiceFormData] && field.required && (
+                  <Check className="absolute right-3 top-9 w-5 h-5 text-success-green-DEFAULT animate-fadeIn" style={{animationDuration: '0.2s'}}/>
+                )}
                 {errors[field.id as keyof InvoiceFormData] && (
                   <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors[field.id as keyof InvoiceFormData]?.message as string}</p>
                 )}
@@ -232,7 +248,7 @@ export default function CreateInvoicePageClient() {
               { id: 'recipientName', label: 'Recipient Name', type: 'text', icon: User, required: true },
               { id: 'recipientEmail', label: 'Recipient Email', type: 'email', icon: Mail, required: true },
             ].map(field => (
-               <div key={field.id} className="space-y-1.5">
+               <div key={field.id} className="space-y-1.5 relative">
                 <Label htmlFor={field.id} className="flex items-center text-text-dark font-body text-sm">
                   <field.icon className="w-4 h-4 mr-2 text-success-green-DEFAULT" />
                   {field.label} {field.required && <span className="text-destructive-DEFAULT ml-1">*</span>}
@@ -241,10 +257,13 @@ export default function CreateInvoicePageClient() {
                   id={field.id}
                   type={field.type}
                   {...register(field.id as keyof InvoiceFormData)}
-                  className="bg-card-white input-focus-glow font-body"
+                  className={`bg-card-white input-focus-glow font-body ${checkFieldCompletion(field.id as keyof InvoiceFormData)}`}
                   aria-invalid={errors[field.id as keyof InvoiceFormData] ? "true" : "false"}
                   placeholder={field.type === 'email' ? 'recipient@example.com' : `Enter ${field.label.toLowerCase()}`}
                 />
+                {touchedFields[field.id as keyof InvoiceFormData] && !errors[field.id as keyof InvoiceFormData] && field.required && (
+                  <Check className="absolute right-3 top-9 w-5 h-5 text-success-green-DEFAULT animate-fadeIn" style={{animationDuration: '0.2s'}}/>
+                )}
                 {errors[field.id as keyof InvoiceFormData] && (
                   <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors[field.id as keyof InvoiceFormData]?.message as string}</p>
                 )}
@@ -262,7 +281,7 @@ export default function CreateInvoicePageClient() {
             <CardDescription className="font-body text-text-light">Details about the service or product.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            <div>
+            <div className="relative">
               <Label htmlFor="invoiceDescription" className="flex items-center text-text-dark font-body text-sm">
                 <Edit3 className="w-4 h-4 mr-2 text-purple-accent-DEFAULT" />
                 What is this for? <span className="text-destructive-DEFAULT ml-1">*</span>
@@ -270,10 +289,13 @@ export default function CreateInvoicePageClient() {
               <Textarea
                 id="invoiceDescription"
                 {...register('invoiceDescription')}
-                className="min-h-[100px] bg-card-white input-focus-glow transition-all duration-300 ease-in-out focus:min-h-[150px] font-body"
+                className={`min-h-[100px] bg-card-white input-focus-glow transition-all duration-300 ease-in-out focus:min-h-[150px] font-body ${checkFieldCompletion('invoiceDescription')}`}
                 aria-invalid={errors.invoiceDescription ? "true" : "false"}
                 placeholder="e.g., Web development services, Monthly consulting fee"
               />
+              {touchedFields.invoiceDescription && !errors.invoiceDescription && (
+                <Check className="absolute right-3 top-[calc(1.25rem+8px)] w-5 h-5 text-success-green-DEFAULT animate-fadeIn" style={{animationDuration: '0.2s'}}/>
+              )}
               {errors.invoiceDescription && (
                 <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors.invoiceDescription.message}</p>
               )}
@@ -284,7 +306,7 @@ export default function CreateInvoicePageClient() {
                 <div className="mt-2 space-y-1 border border-purple-accent-DEFAULT/20 rounded-md p-2 bg-card-white/50">
                   <p className="text-xs text-purple-accent-DEFAULT font-semibold mb-1">Suggestions:</p>
                   {suggestions.map((s, i) => (
-                    <Button key={i} type="button" variant="ghost" size="sm" className="w-full justify-start text-left font-body active:scale-95 hover:bg-purple-accent-DEFAULT/10 text-text-dark text-xs h-auto py-1.5 px-2" onClick={() => setValue('invoiceDescription', s, { shouldDirty: true })}>
+                    <Button key={i} type="button" variant="ghost" size="sm" className="w-full justify-start text-left font-body active:scale-95 hover:bg-purple-accent-DEFAULT/10 text-text-dark text-xs h-auto py-1.5 px-2" onClick={() => setValue('invoiceDescription', s, { shouldDirty: true, shouldValidate: true })}>
                       {s}
                     </Button>
                   ))}
@@ -303,7 +325,7 @@ export default function CreateInvoicePageClient() {
                         control={control}
                         render={({ field }) => (
                         <Select onValueChange={(value) => { field.onChange(value); handleCurrencyChange(value); }} defaultValue={field.value}>
-                            <SelectTrigger className="bg-card-white input-focus-glow font-body">
+                            <SelectTrigger className={`bg-card-white input-focus-glow font-body ${checkFieldCompletion('currency')}`}>
                                 <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
@@ -319,7 +341,7 @@ export default function CreateInvoicePageClient() {
                     {errors.currency && <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors.currency.message as string}</p>}
                 </div>
 
-                <div>
+                <div className="relative">
                     <Label htmlFor="amount" className="flex items-center text-text-dark font-body text-sm">
                         <DollarSign className="w-4 h-4 mr-2 text-purple-accent-DEFAULT" />
                         Amount <span className="text-destructive-DEFAULT ml-1">*</span>
@@ -330,15 +352,23 @@ export default function CreateInvoicePageClient() {
                         id="amount"
                         type="text" // Use text to better control input, Zod handles parsing
                         {...register('amount')}
-                        className="pl-7 bg-card-white input-focus-glow font-body"
+                        className={`pl-7 bg-card-white input-focus-glow font-body ${checkFieldCompletion('amount')}`}
                         aria-invalid={errors.amount ? "true" : "false"}
                         placeholder="e.g., 1500.00"
                         onInput={(e) => { // Basic input formatting guidance
                             const target = e.target as HTMLInputElement;
-                            target.value = target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                            let value = target.value.replace(/[^0-9.]/g, '');
+                            const parts = value.split('.');
+                            if (parts.length > 2) {
+                                value = parts[0] + '.' + parts.slice(1).join('');
+                            }
+                            target.value = value;
                         }}
                         />
                     </div>
+                    {touchedFields.amount && !errors.amount && (
+                        <Check className="absolute right-3 top-9 w-5 h-5 text-success-green-DEFAULT animate-fadeIn" style={{animationDuration: '0.2s'}}/>
+                    )}
                     {errors.amount && <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors.amount.message as string}</p>}
                 </div>
             </div>
@@ -358,7 +388,7 @@ export default function CreateInvoicePageClient() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`w-full justify-start text-left font-normal bg-card-white hover:bg-muted-DEFAULT ${!field.value && "text-text-light"} input-focus-glow font-body active:scale-95 min-h-[40px]`}
+                          className={`w-full justify-start text-left font-normal bg-card-white hover:bg-muted-DEFAULT ${!field.value && "text-text-light"} input-focus-glow font-body active:scale-95 min-h-[40px] ${checkFieldCompletion('invoiceDate')}`}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
@@ -368,7 +398,7 @@ export default function CreateInvoicePageClient() {
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={(date) => { if(date) field.onChange(date); setValue('invoiceDate', date, {shouldDirty: true}); }}
+                          onSelect={(date) => { if(date) field.onChange(date); setValue('invoiceDate', date, {shouldDirty: true, shouldValidate: true}); }}
                           initialFocus
                         />
                       </PopoverContent>
@@ -377,7 +407,7 @@ export default function CreateInvoicePageClient() {
                 />
                 {errors.invoiceDate && <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors.invoiceDate.message as string}</p>}
               </div>
-              <div>
+              <div className="relative">
                 <Label htmlFor="invoiceNumberDisplay" className="flex items-center text-text-dark font-body text-sm">
                   <Hash className="w-4 h-4 mr-2 text-purple-accent-DEFAULT" />
                   Invoice Number
@@ -388,9 +418,12 @@ export default function CreateInvoicePageClient() {
                     className="h-10 w-full rounded-md border border-input bg-muted-DEFAULT px-3 py-2 text-sm font-body cursor-not-allowed flex items-center overflow-hidden whitespace-nowrap"
                     style={{"--typewriter-chars": `${currentInvoiceNumber.length}ch`, "--typewriter-steps": `${currentInvoiceNumber.length || 1}`} as React.CSSProperties}
                 >
-                    {currentInvoiceNumber.length > 0 ? <span className="animate-typewriter">{currentInvoiceNumber}</span> : <span className="text-text-light">Generating...</span>}
+                    {currentInvoiceNumber.length > 0 ? <span className="animate-typewriter border-r-text-dark">{currentInvoiceNumber}</span> : <span className="text-text-light">Generating...</span>}
                 </div>
                 <input type="hidden" {...register('invoiceNumber')} />
+                 {touchedFields.invoiceNumber && !errors.invoiceNumber && currentInvoiceNumber && (
+                  <Check className="absolute right-3 top-9 w-5 h-5 text-success-green-DEFAULT animate-fadeIn" style={{animationDuration: '0.2s'}}/>
+                )}
                 {errors.invoiceNumber && <p className="text-xs text-destructive-DEFAULT flex items-center font-body animate-gentleShake"><AlertTriangle size={12} className="mr-1" />{errors.invoiceNumber.message as string}</p>}
               </div>
             </div>
@@ -407,3 +440,6 @@ export default function CreateInvoicePageClient() {
     </div>
   );
 }
+
+
+    
