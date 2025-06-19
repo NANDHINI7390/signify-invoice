@@ -125,7 +125,12 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
       let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
       if (invoiceData) {
-        url += `&data=${encodeURIComponent(JSON.stringify(invoiceData))}`;
+        // Make sure all relevant data is passed for PDF generation
+        const dataToPass = {
+          ...invoiceData,
+          // Add any other fields that might be missing but needed for the PDF
+        };
+        url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
       }
       if (signatureToSend) {
         url += `&signature=${encodeURIComponent(signatureToSend)}`;
@@ -274,23 +279,29 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             </div>
           )}
           
-          <div className="flex items-start space-x-3 mt-6 pt-4 border-t border-border">
-            <Checkbox 
-              id="agreement" 
-              checked={agreementChecked}
-              onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
-              className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0"
-              aria-labelledby="agreement-label"
-            />
-            <Label htmlFor="agreement" id="agreement-label" className="text-sm text-text-light leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
-              I, <span className="font-semibold text-text-dark">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
+          <div className="mt-6 pt-4 border-t border-border">
+            <Label
+              htmlFor="agreement"
+              id="agreement-label"
+              className="flex items-start space-x-3 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              <Checkbox
+                id="agreement"
+                checked={agreementChecked}
+                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
+                className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0"
+                aria-labelledby="agreement-label"
+              />
+              <span className="flex-1">
+                I, <span className="font-semibold text-text-dark">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
+              </span>
             </Label>
           </div>
         </CardContent>
         <CardFooter className="p-6 bg-background-gray border-t border-border">
           <Button 
             onClick={handleSign} 
-            disabled={isLoading}
+            disabled={isLoading || (!agreementChecked || (useTextSignature ? !textSignature.trim() : !signatureDataUrl)) }
             className="w-full text-lg py-3 min-h-[50px] gradient-button-blue-to-green text-white font-semibold rounded-xl shadow-button-hover-blue hover:transform hover:-translate-y-1 transition-all duration-300 active:scale-95"
           >
             {isLoading ? (
@@ -305,4 +316,3 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
-
