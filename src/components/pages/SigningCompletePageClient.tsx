@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,7 @@ const currencySymbols: { [key: string]: string } = {
 
 const BLANK_IMAGE_DATA_URL = 'data:,';
 const MIN_DATA_URL_LENGTH = 150; 
-const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; // Key for localStorage
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
 
 const SenderNotificationStatus = ({ status, onRetry }: { status: 'pending' | 'success' | 'error' | 'idle' | 'retrying', onRetry: () => void }) => {
   if (status === 'idle') return null;
@@ -97,8 +96,8 @@ export default function SigningCompletePageClient() {
       try {
         sigValue = localStorage.getItem(TEMP_DRAWN_SIGNATURE_KEY);
         if (sigValue) {
-          console.log('SigningCompletePageClient useEffect: Retrieved drawn signature from localStorage (length:', sigValue.length, ')');
-          localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); // Clean up immediately
+          console.log('SigningCompletePageClient useEffect: Retrieved drawn signature (PNG) from localStorage (length:', sigValue.length, ')');
+          localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); 
         } else {
           console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
           setError("Drawn signature data not found. It might have been cleared or not saved correctly.");
@@ -134,15 +133,14 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
-    // Check for meaningful signature, not just 'data:,' or too short
     if (sigValue && sigValue !== BLANK_IMAGE_DATA_URL && sigValue.length > MIN_DATA_URL_LENGTH) {
         setSignature(sigValue); 
     } else {
         console.log('SigningCompletePageClient useEffect: sigValue is blank, too short, or null. Setting signature to null. Actual sigValue prefix:', sigValue ? sigValue.substring(0,30) : "null");
         setSignature(null); 
-        if (sigType === 'draw' && !sigValue && !error) { // Only set error if not already set for other reasons
+        if (sigType === 'draw' && !sigValue && !error) { 
           setError("Drawn signature data not found after signing. It might have been cleared or not saved correctly.");
-        } else if (sigValue && !error) { // If it was present but trivial and no other error set
+        } else if (sigValue && !error && (sigValue === BLANK_IMAGE_DATA_URL || sigValue.length <= MIN_DATA_URL_LENGTH)) { 
            setError(`Invalid or empty ${sigType} signature data received.`);
         }
     }
@@ -152,7 +150,7 @@ export default function SigningCompletePageClient() {
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]); // Only searchParams dependency
+  }, [searchParams]); 
 
 
   useEffect(() => {
@@ -202,7 +200,7 @@ export default function SigningCompletePageClient() {
         description: "EmailJS variables for sender notification are not set. Check NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
         duration: 8000,
       });
-      console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local");
+      console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local: NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY");
       setIsNotifyingSender(false);
       setNotificationStatus('error');
       return;
@@ -265,7 +263,7 @@ export default function SigningCompletePageClient() {
       const addWrappedText = (text: string, x: number, currentYPos: number, maxWidth: number, spacing: number): number => {
         let localYPos = currentYPos;
         const lines = doc.splitTextToSize(text, maxWidth);
-        lines.forEach((line: string) => {
+        lines.forEach((line: string) {
           if (localYPos > pageHeight - margin - spacing) { doc.addPage(); localYPos = margin; }
           doc.text(line, x, localYPos);
           localYPos += spacing;
@@ -388,7 +386,10 @@ export default function SigningCompletePageClient() {
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
         } else { 
             doc.setFont("helvetica", "italic"); 
-            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Not PNG]" : "[Text Signature Data Invalid]";
+            let errorText = "[Signature Data Invalid or Unsupported Format]";
+            if(signatureType === 'draw' && !signature.startsWith('data:image/png;base64,')) {
+                errorText = "[Drawn Signature Data Not PNG Format]";
+            }
             addText(errorText, margin, yPos); 
             console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
             yPos += smallLineSpacing;
@@ -486,8 +487,8 @@ export default function SigningCompletePageClient() {
         >
           <Download className="mr-2 w-5 h-5" /> Download Signed PDF
         </Button>
-        {(!signature && signatureType === 'draw') && (
-            <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve drawn signature for PDF.</p>
+        {(!signature && signatureType === 'draw' && !error) && (
+            <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve drawn signature for PDF. Please ensure you drew a signature.</p>
         )}
          {error && <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>{error}</p>}
       </div>

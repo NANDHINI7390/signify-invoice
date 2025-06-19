@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -39,7 +38,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
           
           const currentDataUrl = cleanCanvas.toDataURL('image/png', 1.0); // Export as PNG with high quality
 
-          // Stronger check for meaningful data
           if (currentDataUrl && currentDataUrl !== 'data:,' && currentDataUrl.length > MIN_MEANINGFUL_DATA_URL_LENGTH) {
             dataUrlToSend = currentDataUrl;
             console.log('SignaturePadComponent: Pad has meaningful content. Sending PNG Data URL (prefix & length):', dataUrlToSend.substring(0, 50) + '...', dataUrlToSend.length);
@@ -70,27 +68,24 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      // Save current signature if any
       const currentSignaturePoints = pad.isEmpty() ? null : pad.toData();
 
-      // Adjust canvas style size first
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
-      canvas.style.height = `200px`; // Fixed height as per your design
+      canvas.style.height = `200px`; 
 
-      // Then adjust canvas actual drawing surface size
       canvas.width = wrapperRef.current.offsetWidth * ratio;
-      canvas.height = 200 * ratio; // Fixed height * ratio
+      canvas.height = 200 * ratio; 
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.scale(ratio, ratio);
       }
       
-      pad.clear(); // Clear current drawing (it's scaled now)
+      pad.clear(); 
       if (currentSignaturePoints && currentSignaturePoints.length > 0) {
-         pad.fromData(currentSignaturePoints); // Restore drawing
+         pad.fromData(currentSignaturePoints); 
       }
-      updateSignatureState(); // Update state after resize/restore
+      updateSignatureState(); 
     }
   }, [updateSignatureState]);
 
@@ -98,7 +93,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent background on the drawing canvas itself
+        backgroundColor: 'rgba(255, 255, 255, 0)', // Draw on transparent background
         penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75, 
         maxWidth: 2.5, 
@@ -116,11 +111,10 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       });
       signaturePadInstanceRef.current = pad;
       
-      resizeCanvas(); // Initial resize and state update
+      resizeCanvas(); 
       
       window.addEventListener('resize', resizeCanvas);
       
-      // Initial state update after setup
       const initialTimeout = setTimeout(() => updateSignatureState(), 50);
 
       return () => {
@@ -130,14 +124,14 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // updateSignatureState and resizeCanvas are memoized
+  }, []); 
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
       signaturePadInstanceRef.current.clear();
-      setIsDrawing(false); // Reset drawing state
+      setIsDrawing(false); 
       console.log('SignaturePadComponent: clearSignature called.');
-      updateSignatureState(); // Update parent and placeholder
+      updateSignatureState(); 
     }
   };
   
@@ -145,11 +139,11 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     <div 
       ref={wrapperRef} 
       className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50"
-      style={{ touchAction: 'none' }} // Prevent page scroll on touch devices when drawing
+      style={{ touchAction: 'none' }} 
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair" // Ensure canvas fills its wrapper for correct scaling
+        className="w-full h-full cursor-crosshair"
         aria-label="Signature Pad"
         id="signature-canvas"
       />
@@ -168,7 +162,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         className="absolute top-2 right-2 text-muted-foreground hover:text-destructive p-1 h-8 w-8 active:scale-90 bg-card/50 hover:bg-card/80 rounded-full z-10 clear-btn" 
         aria-label="Clear Signature"
         id="clear-signature"
-        // Disable clear button if not drawing and pad is empty
         disabled={!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true)} 
       >
         <Trash2 className="w-4 h-4" />
