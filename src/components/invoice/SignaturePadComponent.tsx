@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -15,9 +16,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   const [isDrawing, setIsDrawing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
-
-  // Store the dataURL of a blank canvas with the component's background for comparison
-  const [blankCanvasDataUrl, setBlankCanvasDataUrl] = useState<string | null>(null);
+  // No longer need blankCanvasDataUrl if relying purely on isEmpty and direct toDataURL
 
   const resizeCanvas = useCallback(() => {
     if (canvasRef.current && wrapperRef.current && signaturePadInstanceRef.current) {
@@ -25,10 +24,10 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      const currentData = pad.toDataURL('image/png'); // Preserve current drawing
+      const currentData = pad.toDataURL('image/png'); 
 
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
-      canvas.style.height = `200px`; // Fixed height
+      canvas.style.height = `200px`; 
 
       canvas.width = wrapperRef.current.offsetWidth * ratio;
       canvas.height = 200 * ratio;
@@ -38,49 +37,54 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ctx.scale(ratio, ratio);
       }
       
-      pad.clear();
-      // Capture what a blank canvas with the intended background looks like
-      // Ensure the background is applied before capturing blank state if it's not transparent
-      const tempBlankDataUrl = pad.toDataURL('image/png');
-      if (!blankCanvasDataUrl) {
-        setBlankCanvasDataUrl(tempBlankDataUrl);
+      pad.clear(); // Clear before restoring to ensure proper state
+      if (currentData && currentData !== 'data:,') { // Check if there was actual data
+         // Check if pad was truly empty before attempting to restore.
+        // Create a temporary pad to check if currentData represents an empty state.
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempPad = new SignaturePad(tempCanvas, { backgroundColor: 'rgba(255, 255, 255, 0)'});
+        const emptyDataUrlForComparison = tempPad.toDataURL('image/png');
+        tempPad.off();
+
+
+        if (currentData !== emptyDataUrlForComparison) {
+            pad.fromDataURL(currentData);
+        }
       }
-      
-      if (currentData && currentData !== tempBlankDataUrl && currentData !== 'data:,') {
-        pad.fromDataURL(currentData);
+      // After resize and potential data restoration, update parent if needed
+      if (!pad.isEmpty()) {
+        if (placeholderRef.current) placeholderRef.current.style.display = 'none';
+      } else {
+        if (placeholderRef.current) placeholderRef.current.style.display = 'block';
       }
     }
-  }, [blankCanvasDataUrl]);
+  }, []);
 
   const checkPadEmptyAndNotify = useCallback(() => {
     if (signaturePadInstanceRef.current) {
       const pad = signaturePadInstanceRef.current;
-      const currentDataUrl = pad.toDataURL('image/png');
-      
-      // A pad is considered empty if its data URL matches the blank state or is the minimal 'data:,'
-      const isTrulyEmpty = pad.isEmpty() || currentDataUrl === blankCanvasDataUrl || currentDataUrl === 'data:,';
-
-      if (isTrulyEmpty) {
+      if (pad.isEmpty()) {
         onSignatureChange(null);
         if (placeholderRef.current) placeholderRef.current.style.display = 'block';
       } else {
-        onSignatureChange(currentDataUrl);
+        onSignatureChange(pad.toDataURL('image/png'));
         if (placeholderRef.current) placeholderRef.current.style.display = 'none';
       }
     }
-  }, [onSignatureChange, blankCanvasDataUrl]);
+  }, [onSignatureChange]);
 
   useEffect(() => {
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
-      // Initialize with a transparent background for the pad itself; container provides visible bg
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent for pad, container has bg
-        penColor: 'rgb(31, 41, 55)', // Dark pen
-        minWidth: 0.75,
-        maxWidth: 2.0,
+        backgroundColor: 'rgba(255, 255, 255, 0)',
+        penColor: 'rgb(31, 41, 55)',
+        minWidth: 0.75, // As per last good config
+        maxWidth: 2.0,  // As per last good config
         throttle: 16,
-        minDistance: 3,
+        minDistance: 3, // As per last good config
         onBegin: () => {
           setIsDrawing(true);
           if (placeholderRef.current) placeholderRef.current.style.display = 'none';
@@ -93,18 +97,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       signaturePadInstanceRef.current = pad;
       
       resizeCanvas(); 
-      // Set initial blank canvas data URL
-      if (pad && !blankCanvasDataUrl) {
-        const tempCtx = canvas.getContext('2d');
-        if (tempCtx) {
-            // Temporarily clear to get the 'truly blank' state of this canvas instance
-            const originalData = pad.toDataURL();
-            pad.clear();
-            setBlankCanvasDataUrl(pad.toDataURL('image/png'));
-            if(originalData !== 'data:,') pad.fromDataURL(originalData); // Restore if it wasn't blank
-        }
-      }
-
+      checkPadEmptyAndNotify(); // Initial check
 
       window.addEventListener('resize', resizeCanvas);
       
@@ -113,12 +106,12 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         signaturePadInstanceRef.current?.off(); 
       };
     }
-  }, [resizeCanvas, checkPadEmptyAndNotify, blankCanvasDataUrl]);
+  }, [resizeCanvas, checkPadEmptyAndNotify]);
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
       signaturePadInstanceRef.current.clear();
-      onSignatureChange(null); // Notify parent that signature is cleared
+      onSignatureChange(null); 
       setIsDrawing(false);
       if (placeholderRef.current) placeholderRef.current.style.display = 'block';
     }
@@ -127,19 +120,19 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-blue-50 z-40" // bg-blue-50 is similar to #FAFBFF
-      style={{ touchAction: 'none' }} // Apply touch-action to the container
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-blue-50 z-40"
+      style={{ touchAction: 'none' }} 
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair" // Removed touch-none here, container has it
+        className="w-full h-full cursor-crosshair"
         aria-label="Signature Pad"
-        id="signature-canvas" // Added ID for potential direct manipulation if needed
+        id="signature-canvas"
       />
       <div 
         ref={placeholderRef}
         id="signature-placeholder"
-        className="signature-placeholder" // Class from globals.css for styling
+        className="signature-placeholder"
       >
         ✍️ Draw your signature here
       </div>
@@ -148,10 +141,9 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         variant="ghost"
         size="icon" 
         onClick={clearSignature}
-        className="absolute top-2 right-2 text-text-light hover:text-destructive p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full z-10 clear-btn" // Added clear-btn class
+        className="absolute top-2 right-2 text-text-light hover:text-destructive p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full z-50 clear-btn" 
         aria-label="Clear Signature"
-        id="clear-signature" // Added ID for potential direct manipulation if needed
-        // Disable if not drawing AND pad is empty
+        id="clear-signature"
         disabled={!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true)} 
       >
         <Trash2 className="w-4 h-4" />

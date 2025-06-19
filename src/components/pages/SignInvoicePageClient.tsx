@@ -4,18 +4,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit, Check, Loader2, AlertTriangle, FileText, UserCircle, Building } from 'lucide-react';
+import { Edit, Check, Loader2, AlertTriangle, FileText, UserCircle, Building, Info } from 'lucide-react';
 import SignaturePadComponent from '@/components/invoice/SignaturePadComponent';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 interface InvoiceData {
-  id?: string; // For mock
+  id?: string; 
   invoiceNumber: string;
   senderName: string;
   senderEmail: string;
@@ -25,38 +24,27 @@ interface InvoiceData {
   invoiceDescription: string;
   amount: number;
   currency: string;
-  invoiceDate: string; // ISO string
+  invoiceDate: string; 
   items?: { description: string; quantity: number; unitPrice: number; total: number }[];
 }
 
 const currencySymbols: { [key: string]: string } = {
-  INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  AUD: 'A$',
-  CAD: 'C$',
+  INR: '₹', USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$',
 };
 
 const mockInvoiceFallback: InvoiceData = {
-  id: "INV-FALLBACK-001",
-  invoiceNumber: "INV-FALLBACK-001",
-  senderName: "Signify Demo Corp.",
-  senderEmail: "billing@signifydemo.com",
+  id: "INV-FALLBACK-001", invoiceNumber: "INV-FALLBACK-001",
+  senderName: "Signify Demo Corp.", senderEmail: "billing@signifydemo.com",
   senderAddress: "123 Demo Street, Suite 400, Tech City, TC 54321",
-  recipientName: "John Signee",
-  recipientEmail: "john.signee@example.com",
+  recipientName: "John Signee", recipientEmail: "john.signee@example.com",
   invoiceDescription: "Sample consulting services rendered for Q4, including project management and technical advisory.",
-  amount: 3500.00,
-  currency: 'USD',
-  invoiceDate: new Date().toISOString(),
+  amount: 3500.00, currency: 'USD', invoiceDate: new Date().toISOString(),
   items: [
     { description: "Project Management (10 hours)", quantity: 1, unitPrice: 1500, total: 1500 },
     { description: "Technical Advisory (5 hours)", quantity: 1, unitPrice: 1000, total: 1000 },
     { description: "Support Services", quantity: 1, unitPrice: 1000, total: 1000 },
   ]
 };
-
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
   const router = useRouter();
@@ -68,8 +56,12 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   const [textSignature, setTextSignature] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [buttonText, setButtonText] = useState('Please sign above');
 
+  const [signButtonText, setSignButtonText] = useState('⏸️ Complete signature and agreement');
+  const [signButtonDisabled, setSignButtonDisabled] = useState(true);
+  const [signButtonStyle, setSignButtonStyle] = useState<React.CSSProperties>({ backgroundColor: '#6B7280', cursor: 'not-allowed', opacity: '0.5' });
+  const [signatureStatusText, setSignatureStatusText] = useState('Please sign above and agree to terms');
+  const [signatureStatusColor, setSignatureStatusColor] = useState('#6B7280');
 
   useEffect(() => {
     const dataString = searchParams.get('data');
@@ -91,50 +83,73 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   }, [invoiceId, searchParams]);
 
   const handleSignatureDataChange = useCallback((dataUrl: string | null) => {
-    console.log("Signature data received by SignInvoicePageClient:", dataUrl);
     setSignatureDataUrl(dataUrl);
+  }, []);
+  
+  const toggleAgreement = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAgreementChecked(prev => !prev);
   }, []);
 
   useEffect(() => {
-    const hasSignature = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
-    const hasAgreement = agreementChecked;
+    const isDrawSignatureProvided = !!signatureDataUrl && signatureDataUrl !== 'data:,';
+    const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
+    const hasSignature = isDrawSignatureProvided || isTextSignatureProvided;
 
-    if (hasSignature && hasAgreement) {
-      setButtonText('✓ Sign Invoice Now');
-    } else if (hasSignature && !hasAgreement) {
-      setButtonText('Please agree to terms');
+    if (hasSignature && agreementChecked) {
+      setSignButtonText('✅ Sign Invoice Now');
+      setSignButtonDisabled(false);
+      setSignButtonStyle({ backgroundColor: '#10B981', cursor: 'pointer', opacity: '1' });
+      setSignatureStatusText('✓ Ready to sign!');
+      setSignatureStatusColor('#10B981');
+    } else if (hasSignature && !agreementChecked) {
+      setSignButtonText('📋 Please agree to terms below');
+      setSignButtonDisabled(true);
+      setSignButtonStyle({ backgroundColor: '#F59E0B', cursor: 'not-allowed', opacity: '0.7' });
+      setSignatureStatusText('⚠️ Please check the agreement box');
+      setSignatureStatusColor('#F59E0B');
+    } else if (!hasSignature && agreementChecked) {
+      setSignButtonText('✍️ Please draw your signature above');
+      setSignButtonDisabled(true);
+      setSignButtonStyle({ backgroundColor: '#3B82F6', cursor: 'not-allowed', opacity: '0.7' });
+      setSignatureStatusText('✍️ Draw your signature in the box above');
+      setSignatureStatusColor('#3B82F6');
     } else {
-      setButtonText('Please sign above');
+      setSignButtonText('⏸️ Complete signature and agreement');
+      setSignButtonDisabled(true);
+      setSignButtonStyle({ backgroundColor: '#6B7280', cursor: 'not-allowed', opacity: '0.5' });
+      setSignatureStatusText('Please sign above and agree to terms');
+      setSignatureStatusColor('#6B7280');
     }
   }, [signatureDataUrl, textSignature, useTextSignature, agreementChecked]);
 
 
   const handleSign = () => {
-    const hasValidSignature = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
+    const isDrawSignatureProvided = !!signatureDataUrl && signatureDataUrl !== 'data:,';
+    const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
+    const hasValidSignature = isDrawSignatureProvided || isTextSignatureProvided;
 
     if (!agreementChecked) {
       toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
-      const agreeCheckbox = document.getElementById('agreement-checkbox');
-      if (agreeCheckbox) agreeCheckbox.focus();
       return;
     }
     if (!hasValidSignature) {
       toast({ variant: "destructive", title: "Signature Required", description: "Please draw or type your signature.", duration: 3000 });
-      if (useTextSignature) {
-        const textSigInput = document.getElementById('textSignature');
-        if (textSigInput) textSigInput.focus();
-      }
       return;
     }
 
     setIsLoading(true);
     toast({ title: "Processing Signature...", description: "Please wait a moment.", duration: 2000 });
     
+    const signedAt = new Date().toISOString();
+    const signedUserAgent = navigator.userAgent;
+
     setTimeout(() => {
       setIsLoading(false);
       const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
       const signatureToSend = useTextSignature ? textSignature : signatureDataUrl;
-      const signatureType = useTextSignature ? 'text' : 'draw';
+      const signatureTypeParam = useTextSignature ? 'text' : 'draw';
 
       let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
       if (invoiceData) {
@@ -144,7 +159,9 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       if (signatureToSend) {
         url += `&signature=${encodeURIComponent(signatureToSend)}`;
       }
-      url += `&signatureType=${signatureType}`;
+      url += `&signatureType=${signatureTypeParam}`;
+      url += `&signedAt=${encodeURIComponent(signedAt)}`;
+      url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
       
       router.push(url);
     }, 2000);
@@ -153,7 +170,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   if (error && !invoiceData) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
-        <AlertTriangle className="w-16 h-16 text-destructive-DEFAULT mb-4" />
+        <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
         <h1 className="text-2xl font-bold text-text-dark mb-2">Error Loading Invoice</h1>
         <p className="text-text-light mb-6">{error}</p>
       </div>
@@ -163,40 +180,38 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   if (!invoiceData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-blue-DEFAULT" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-4 text-text-light">Loading invoice...</p>
       </div>
     );
   }
   
   const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
-  const isSignatureProvided = useTextSignature ? textSignature.trim() !== '' : !!signatureDataUrl;
-  const isButtonDisabled = isLoading || !agreementChecked || !isSignatureProvided;
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-0 animate-fadeIn">
       <Card className="bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border">
-        <CardHeader className="bg-primary-blue-DEFAULT/5 p-6 border-b border-primary-blue-DEFAULT/10">
+        <CardHeader className="bg-primary/5 p-6 border-b border-primary/10">
           <div className="flex items-center justify-center space-x-3">
-            <FileText className="w-10 h-10 text-primary-blue-DEFAULT" />
+            <FileText className="w-10 h-10 text-primary" />
             <div>
-              <CardTitle className="text-2xl md:text-3xl font-headline text-primary-blue-DEFAULT">Invoice for Signing</CardTitle>
-              <CardDescription className="text-text-light font-body">Please review the details carefully.</CardDescription>
+              <CardTitle className="text-2xl md:text-3xl font-headline text-primary">Invoice for Signing</CardTitle>
+              <CardDescription className="text-muted-foreground font-body">Please review the details carefully.</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-6 md:p-8 space-y-6 font-body">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-6 text-sm">
             <div>
-              <h3 className="font-semibold text-text-dark mb-2 flex items-center"><Building size={16} className="mr-2 text-text-light" />FROM:</h3>
-              <p className="text-text-dark font-medium">{invoiceData.senderName}</p>
-              <p className="text-text-light">{invoiceData.senderEmail}</p>
-              {invoiceData.senderAddress && <p className="text-text-light text-xs mt-1">{invoiceData.senderAddress}</p>}
+              <h3 className="font-semibold text-foreground mb-2 flex items-center"><Building size={16} className="mr-2 text-muted-foreground" />FROM:</h3>
+              <p className="text-foreground font-medium">{invoiceData.senderName}</p>
+              <p className="text-muted-foreground">{invoiceData.senderEmail}</p>
+              {invoiceData.senderAddress && <p className="text-muted-foreground text-xs mt-1">{invoiceData.senderAddress}</p>}
             </div>
             <div className="md:text-left md:pl-0">
-              <h3 className="font-semibold text-text-dark mb-2 flex items-center"><UserCircle size={16} className="mr-2 text-text-light" />TO:</h3>
-              <p className="text-text-dark font-medium">{invoiceData.recipientName}</p>
-              <p className="text-text-light">{invoiceData.recipientEmail}</p>
+              <h3 className="font-semibold text-foreground mb-2 flex items-center"><UserCircle size={16} className="mr-2 text-muted-foreground" />TO:</h3>
+              <p className="text-foreground font-medium">{invoiceData.recipientName}</p>
+              <p className="text-muted-foreground">{invoiceData.recipientEmail}</p>
             </div>
           </div>
           
@@ -204,30 +219,30 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-                <span className="font-semibold text-text-dark">Invoice Number:</span>
-                <span className="text-text-light">{invoiceData.invoiceNumber}</span>
+                <span className="font-semibold text-foreground">Invoice Number:</span>
+                <span className="text-muted-foreground">{invoiceData.invoiceNumber}</span>
             </div>
             <div className="flex justify-between">
-                <span className="font-semibold text-text-dark">Invoice Date:</span>
-                <span className="text-text-light">{format(new Date(invoiceData.invoiceDate), 'PPP')}</span>
+                <span className="font-semibold text-foreground">Invoice Date:</span>
+                <span className="text-muted-foreground">{format(new Date(invoiceData.invoiceDate), 'PPP')}</span>
             </div>
           </div>
           
           <Separator />
 
           <div>
-            <h3 className="font-semibold text-text-dark mb-2">Description:</h3>
-            <p className="text-text-light whitespace-pre-wrap p-3 bg-background-gray rounded-md text-sm border border-border">{invoiceData.invoiceDescription}</p>
+            <h3 className="font-semibold text-foreground mb-2">Description:</h3>
+            <p className="text-muted-foreground whitespace-pre-wrap p-3 bg-background rounded-md text-sm border border-border">{invoiceData.invoiceDescription}</p>
           </div>
 
           {invoiceData.items && invoiceData.items.length > 0 && (
             <>
               <Separator />
               <div>
-                <h3 className="font-semibold text-text-dark mb-2">Itemized Breakdown:</h3>
-                <div className="space-y-2 border border-border rounded-md p-3 bg-background-gray/50">
+                <h3 className="font-semibold text-foreground mb-2">Itemized Breakdown:</h3>
+                <div className="space-y-2 border border-border rounded-md p-3 bg-background/50">
                   {invoiceData.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-text-light text-sm pb-1 border-b border-border/50 last:border-b-0 last:pb-0">
+                    <div key={index} className="flex justify-between text-muted-foreground text-sm pb-1 border-b border-border/50 last:border-b-0 last:pb-0">
                       <span>{item.description} (x{item.quantity})</span>
                       <span>{currencySymbols[invoiceData.currency] || invoiceData.currency}{item.total.toFixed(2)}</span>
                     </div>
@@ -239,33 +254,34 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
           
           <Separator className="my-6" />
           
-          <div className="text-right space-y-1 bg-success-green-DEFAULT/5 p-4 rounded-lg border border-success-green-DEFAULT/20">
-            <p className="text-text-dark text-xl font-medium">Total Amount Due:</p>
-            <p className="text-success-green-dark font-bold text-3xl md:text-4xl font-headline">
+          <div className="text-right space-y-1 bg-accent/5 p-4 rounded-lg border border-accent/20">
+            <p className="text-foreground text-xl font-medium">Total Amount Due:</p>
+            <p className="text-accent font-bold text-3xl md:text-4xl font-headline">
               {currencySymbol}{invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-text-light text-xs">({invoiceData.currency})</p>
+            <p className="text-muted-foreground text-xs">({invoiceData.currency})</p>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mt-8 bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border">
-        <CardHeader className="bg-purple-accent-DEFAULT/5 p-6 border-b border-purple-accent-DEFAULT/10 animate-slideInUp">
-             <CardTitle className="text-2xl font-modern-sans text-purple-accent-DEFAULT text-center">Please Review and Sign Below</CardTitle>
+      {/* Signature Section from HTML Structure */}
+      <Card className="mt-8 bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border signature-section">
+        <CardHeader className="bg-purple-accent-DEFAULT/5 p-6 border-b border-purple-accent-DEFAULT/10">
+          <CardTitle className="text-2xl font-modern-sans text-purple-accent-DEFAULT text-center">Please Review and Sign Below</CardTitle>
         </CardHeader>
-        <CardContent className="p-6 md:p-8 space-y-6 font-body">
+        <CardContent className="p-6 md:p-8 space-y-4 font-body">
           <div className="flex items-center space-x-2 mb-4">
             <Button 
               variant={!useTextSignature ? "default" : "outline"} 
               onClick={() => setUseTextSignature(false)}
-              className={`flex-1 min-h-[44px] ${!useTextSignature ? "bg-primary-blue-DEFAULT hover:bg-primary-blue-dark text-white" : "border-primary-blue-DEFAULT text-primary-blue-DEFAULT hover:bg-primary-blue-DEFAULT/10"} active:scale-95 transition-all`}
+              className={`flex-1 min-h-[44px] ${!useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all`}
             >
               <Edit className="mr-2 h-4 w-4" /> Draw Signature
             </Button>
             <Button 
               variant={useTextSignature ? "default" : "outline"} 
               onClick={() => setUseTextSignature(true)}
-              className={`flex-1 min-h-[44px] ${useTextSignature ? "bg-primary-blue-DEFAULT hover:bg-primary-blue-dark text-white" : "border-primary-blue-DEFAULT text-primary-blue-DEFAULT hover:bg-primary-blue-DEFAULT/10"} active:scale-95 transition-all`}
+              className={`flex-1 min-h-[44px] ${useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all`}
             >
               <Edit className="mr-2 h-4 w-4" /> Type Signature
             </Button>
@@ -279,49 +295,57 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
                 placeholder="Your Full Legal Name"
                 value={textSignature}
                 onChange={(e) => setTextSignature(e.target.value)}
-                className="mt-1 border-primary-blue-DEFAULT focus:ring-primary-blue-DEFAULT focus:ring-2 text-xl p-4 rounded-lg input-focus-glow min-h-[56px]"
+                className="mt-1 border-primary focus:ring-primary focus:ring-2 text-xl p-4 rounded-lg input-focus-glow min-h-[56px]"
                 style={{ fontFamily: 'cursive', fontSize: '1.5rem' }}
               />
-              {textSignature && <p className="mt-2 text-sm text-text-light">Preview: <span className="font-medium" style={{ fontFamily: 'cursive', fontSize: '1.2rem' }}>{textSignature}</span></p>}
+              {textSignature && <p className="mt-2 text-sm text-muted-foreground">Preview: <span className="font-medium" style={{ fontFamily: 'cursive', fontSize: '1.2rem' }}>{textSignature}</span></p>}
             </div>
           ) : (
-            <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
+            // Signature Canvas with Enhanced Container
+            <div className="signature-container my-5"> {/* Added margin */}
+                <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
+            </div>
           )}
           
-          <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-start space-x-3 relative z-50 bg-transparent">
-              <Checkbox
-                id="agreement-checkbox" // Updated ID
-                checked={agreementChecked}
-                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
-                className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0 peer"
-                aria-labelledby="agreement-label-text"
-              />
-              <Label
-                htmlFor="agreement-checkbox" // Updated htmlFor
-                id="agreement-label-text"
-                className="flex-1 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                I, <span className="font-semibold text-text-dark">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
+          {/* Status Indicator */}
+          <div id="signature-status" className="signature-status text-center my-2" style={{ color: signatureStatusColor }}>
+            {signatureStatusText}
+          </div>
+          
+          {/* Agreement Section */}
+          <div className="agreement-section" onClick={toggleAgreement} style={{ cursor: 'pointer' }}>
+            <div className="checkbox-container flex items-center space-x-3">
+              <div id="custom-checkbox" className={`custom-checkbox ${agreementChecked ? 'checked' : ''}`}>
+                {agreementChecked && '✓'}
+              </div>
+              {/* Hidden actual checkbox for form semantics if needed, but state is managed by React */}
+              <input type="checkbox" id="agreement-checkbox" checked={agreementChecked} onChange={() => {}} style={{ display: 'none' }} />
+              <Label htmlFor="agreement-checkbox" className="text-sm text-muted-foreground leading-relaxed select-none">
+                I, <span className="font-semibold text-foreground">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
               </Label>
             </div>
           </div>
         </CardContent>
-        <CardFooter className="p-6 bg-background-gray border-t border-border">
+        <CardFooter className="p-6 bg-background border-t border-border">
+          {/* Sign Button with Enhanced States */}
           <Button 
+            type="button"
+            id="sign-invoice-button"
             onClick={handleSign} 
-            disabled={isButtonDisabled}
-            className={`w-full text-lg py-3 min-h-[50px] text-white font-semibold rounded-xl shadow-button-hover-blue hover:transform hover:-translate-y-1 transition-all duration-300 active:scale-95 ${isButtonDisabled ? 'bg-muted hover:bg-muted cursor-not-allowed' : 'gradient-button-blue-to-green'}`}
+            disabled={isLoading || signButtonDisabled}
+            className="w-full text-lg py-3 min-h-[50px] font-semibold rounded-xl shadow-button-hover-blue transition-all duration-300 active:scale-95"
+            style={isLoading ? { backgroundColor: '#A0AEC0', cursor: 'wait', opacity: '0.7', color: 'white' } : signButtonStyle}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
-              isSignatureProvided && agreementChecked && <Check className="mr-2 h-5 w-5" />
+              signButtonText.startsWith('✅') && <Check className="mr-2 h-5 w-5" />
             )}
-            {isLoading ? 'Processing Signature...' : buttonText}
+            {isLoading ? 'Processing Signature...' : signButtonText}
           </Button>
         </CardFooter>
       </Card>
     </div>
   );
 }
+
