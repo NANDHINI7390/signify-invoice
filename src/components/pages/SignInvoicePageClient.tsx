@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -90,6 +90,11 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       // toast({ title: "Notice", description: "Displaying sample invoice data." });
     }
   }, [invoiceId, searchParams]);
+
+  const handleSignatureDataChange = useCallback((dataUrl: string | null) => {
+    console.log("Signature data received by SignInvoicePageClient:", dataUrl);
+    setSignatureDataUrl(dataUrl);
+  }, []);
 
 
   const handleSign = () => {
@@ -268,28 +273,27 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             </div>
           ) : (
             <div className="border border-primary-blue-DEFAULT rounded-lg p-1 bg-card-white">
-                 <SignaturePadComponent onSignatureChange={setSignatureDataUrl} />
+                 <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
             </div>
           )}
           
           <div className="mt-6 pt-4 border-t border-border">
-            <Label
-              htmlFor="agreement"
-              id="agreement-label"
-              className="flex items-start space-x-3 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              onClick={() => setAgreementChecked(prev => !prev)} // Explicitly toggle state on label click
-            >
+            <div className="flex items-start space-x-3">
               <Checkbox
                 id="agreement"
                 checked={agreementChecked}
-                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)} // This will still work and is good for accessibility
-                className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0"
-                aria-labelledby="agreement-label"
+                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
+                className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0 peer"
+                aria-labelledby="agreement-label-text"
               />
-              <span className="flex-1"> {/* Wrap text in a span to ensure proper click area */}
+              <Label
+                htmlFor="agreement"
+                id="agreement-label-text"
+                className="flex-1 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
                 I, <span className="font-semibold text-text-dark">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
-              </span>
-            </Label>
+              </Label>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="p-6 bg-background-gray border-t border-border">
@@ -310,3 +314,4 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
+
