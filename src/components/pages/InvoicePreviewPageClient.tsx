@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -34,6 +35,8 @@ const currencySymbols: { [key: string]: string } = {
   USD: '$',
   EUR: '€',
   GBP: '£',
+  AUD: 'A$',
+  CAD: 'C$',
 };
 
 export default function InvoicePreviewPageClient() {
@@ -87,7 +90,8 @@ export default function InvoicePreviewPageClient() {
       to_name: invoiceData.recipientName,
       from_name: invoiceData.senderName,
       from_email: invoiceData.senderEmail,
-      invoice_link: `${window.location.origin}/sign-invoice/${encodeURIComponent(invoiceData.invoiceNumber)}?data=${encodeURIComponent(JSON.stringify(invoiceData))}`, // Pass data to sign page too
+      // Ensure this link is correctly formed and used in your EmailJS template
+      invoice_link: `${window.location.origin}/sign-invoice/${encodeURIComponent(invoiceData.invoiceNumber)}?data=${encodeURIComponent(JSON.stringify(invoiceData))}`,
       invoice_number: invoiceData.invoiceNumber,
       invoice_date: formattedDate,
       invoice_description: invoiceData.invoiceDescription,
@@ -96,6 +100,9 @@ export default function InvoicePreviewPageClient() {
       sender_phone: invoiceData.senderPhone || 'N/A',
     };
     
+    // Log the parameters to help debug the link
+    console.log("EmailJS Template Parameters:", templateParams);
+
     try {
       if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID') {
          toast({
@@ -104,7 +111,6 @@ export default function InvoicePreviewPageClient() {
           description: "Please ensure all EmailJS IDs (Service, Template, Public Key) are correctly set.",
           duration: 7000,
         });
-        // Simulate sending for testing if not configured
         console.warn("EmailJS not fully configured. Simulating email send for navigation.");
         setTimeout(() => {
           router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
@@ -127,7 +133,7 @@ export default function InvoicePreviewPageClient() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
-        <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
+        <AlertTriangle className="w-16 h-16 text-destructive-DEFAULT mb-4" />
         <h1 className="text-2xl font-bold text-text-dark mb-2">Error Loading Preview</h1>
         <p className="text-text-light mb-6">{error}</p>
         <Button onClick={() => router.push('/create-invoice')}>
@@ -243,3 +249,5 @@ export default function InvoicePreviewPageClient() {
     </div>
   );
 }
+
+    
