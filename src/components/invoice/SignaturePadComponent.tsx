@@ -26,7 +26,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       let dataUrlToSend: string | null = null;
 
       if (!pad.isEmpty()) {
-        // Create a new canvas, fill with white, draw signature, then export
+        // Create a new canvas, fill with white, draw signature, then export as PNG
         const cleanCanvas = document.createElement('canvas');
         cleanCanvas.width = originalCanvas.width;
         cleanCanvas.height = originalCanvas.height;
@@ -39,7 +39,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
           
           const currentDataUrl = cleanCanvas.toDataURL('image/png', 1.0); // Export as PNG with high quality
 
-          // Further check: ensure data URL is meaningful
           if (currentDataUrl && currentDataUrl !== 'data:,' && currentDataUrl.length > MIN_MEANINGFUL_DATA_URL_LENGTH) {
             dataUrlToSend = currentDataUrl;
             console.log('SignaturePadComponent: Pad has meaningful content. Sending PNG Data URL (prefix & length):', dataUrlToSend.substring(0, 50) + '...', dataUrlToSend.length);
@@ -96,11 +95,11 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
         backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent background on the drawing canvas
-        penColor: 'rgb(31, 41, 55)', 
-        minWidth: 0.75,
-        maxWidth: 2.5,
-        throttle: 16,
-        minDistance: 5,
+        penColor: 'rgb(31, 41, 55)', // Dark gray for pen color as per Tailwind text-text-dark
+        minWidth: 0.75, // Finer min width
+        maxWidth: 2.5, // Slightly thicker max width
+        throttle: 16, // Standard throttle
+        minDistance: 5, // Standard min distance
         onBegin: () => {
           setIsDrawing(true);
           if (placeholderRef.current) placeholderRef.current.style.display = 'none';
@@ -137,12 +136,12 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   return (
     <div 
       ref={wrapperRef} 
-      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50"
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border-2 border-dashed border-primary bg-gray-50" // bg-gray-50 for a very light placeholder background
       style={{ touchAction: 'none' }} 
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair" 
+        className="w-full h-full cursor-crosshair" // Ensure canvas fills its wrapper for correct scaling
         aria-label="Signature Pad"
         id="signature-canvas"
       />

@@ -4,7 +4,7 @@
 import { Button } from '@/components/ui/button';
 import { Download, AlertTriangle, Loader2, CalendarDays, Smartphone, Monitor, MailCheck, MailWarning, RefreshCcw } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import AnimatedCheckmark from '@/components/animations/AnimatedCheckmark';
 import { toast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -32,7 +32,7 @@ const currencySymbols: { [key: string]: string } = {
 
 const BLANK_IMAGE_DATA_URL = 'data:,';
 const MIN_DATA_URL_LENGTH = 150; 
-const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData';
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; // Key for localStorage
 
 const SenderNotificationStatus = ({ status, onRetry }: { status: 'pending' | 'success' | 'error' | 'idle' | 'retrying', onRetry: () => void }) => {
   if (status === 'idle') return null;
@@ -100,18 +100,22 @@ export default function SigningCompletePageClient() {
         sigValue = localStorage.getItem(TEMP_DRAWN_SIGNATURE_KEY);
         if (sigValue) {
           console.log('SigningCompletePageClient useEffect: Retrieved drawn signature from localStorage (length:', sigValue.length, ')');
-          localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); // Clean up
+          localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); // Clean up immediately
         } else {
           console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
+          setError("Drawn signature data not found. It might have been cleared or not saved correctly.");
         }
       } catch (e) {
         console.error('SigningCompletePageClient useEffect: Error accessing localStorage for signature', e);
+        setError("Failed to retrieve drawn signature data.");
       }
     } else if (sigType === 'text') {
-      sigValue = searchParams.get('signature');
-      if (sigValue) {
-        sigValue = decodeURIComponent(sigValue);
+      const tempSigValue = searchParams.get('signature');
+      if (tempSigValue) {
+        sigValue = decodeURIComponent(tempSigValue);
         console.log('SigningCompletePageClient useEffect: Retrieved typed signature from URL params:', sigValue);
+      } else {
+        console.warn('SigningCompletePageClient useEffect: Typed signature expected but not found in URL params.');
       }
     }
     
@@ -133,18 +137,24 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
+    // Check for meaningful signature, not just 'data:,' or too short
     if (sigValue && sigValue !== BLANK_IMAGE_DATA_URL && sigValue.length > MIN_DATA_URL_LENGTH) {
-        setSignature(sigValue); // No need to decodeURIComponent if it's from localStorage or already decoded
+        setSignature(sigValue); 
     } else {
-        console.log('SigningCompletePageClient useEffect: sigValue is blank or too short, setting signature to null.');
+        console.log('SigningCompletePageClient useEffect: sigValue is blank, too short, or null. Setting signature to null. Actual sigValue prefix:', sigValue ? sigValue.substring(0,30) : "null");
         setSignature(null); 
+        if (sigType === 'draw' && !sigValue) { // If drawn signature was expected but not found/retrieved
+          // setError is already handled above if localStorage fails
+        } else if (sigValue) { // If it was present but trivial
+           setError(`Invalid or empty ${sigType} signature data received.`);
+        }
     }
     
     if (sigType) setSignatureType(sigType);
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
-  }, [searchParams]);
+  }, [searchParams]); // Only searchParams dependency
 
 
   useEffect(() => {
@@ -170,16 +180,19 @@ export default function SigningCompletePageClient() {
   };
   
   const sendNotificationToSender = useCallback(async () => {
-    if (!invoiceData || !signedAt || isNotifyingSender) {
-      console.log("sendNotificationToSender: Aborting - missing data, already notifying, or already attempted.");
-      if (!notificationAttempted) setNotificationStatus('idle'); // Only reset to idle if not attempted
+    if (!invoiceData || !signedAt || isNotifyingSender || notificationStatus === 'success' || notificationStatus === 'pending' || notificationStatus === 'retrying') {
+      console.log("sendNotificationToSender: Aborting - missing data, already notifying, already succeeded, or an attempt is in progress.", { hasInvoiceData: !!invoiceData, hasSignedAt: !!signedAt, isNotifyingSender, notificationStatus });
+      if (!notificationAttempted && notificationStatus !== 'pending' && notificationStatus !== 'retrying') {
+        // Only set to idle if no attempt was made and it's not currently trying
+        // setNotificationStatus('idle'); // This might cause loops if invoiceData/signedAt are not ready yet
+      }
       return;
     }
 
     console.log("sendNotificationToSender: Attempting to notify sender.");
     setIsNotifyingSender(true);
-    setNotificationStatus(notificationAttempted ? 'retrying' : 'pending'); // Use 'retrying' if it's a retry
-    setNotificationAttempted(true); // Mark that an attempt is being made/has been made
+    setNotificationStatus(notificationAttempted ? 'retrying' : 'pending'); 
+    setNotificationAttempted(true); 
 
     const SENDER_NOTIFY_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID;
     const SENDER_NOTIFY_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID;
@@ -189,10 +202,10 @@ export default function SigningCompletePageClient() {
       toast({
         variant: "destructive",
         title: "Sender Notification Not Configured",
-        description: "EmailJS variables for sender notification are not set. Please configure NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID and NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID.",
+        description: "EmailJS variables for sender notification are not set. Required: NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
         duration: 8000,
       });
-      console.warn("EmailJS for sender notification not fully configured.");
+      console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local");
       setIsNotifyingSender(false);
       setNotificationStatus('error');
       return;
@@ -204,7 +217,6 @@ export default function SigningCompletePageClient() {
       recipient_name: invoiceData.recipientName,
       invoice_number: invoiceData.invoiceNumber,
       signed_date: formatDateFn(new Date(signedAt), 'PPP p'),
-      // Add any other relevant details for the sender notification template
     };
 
     try {
@@ -218,12 +230,11 @@ export default function SigningCompletePageClient() {
     } finally {
       setIsNotifyingSender(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceData, signedAt, isNotifyingSender, notificationAttempted]);
+  }, [invoiceData, signedAt, isNotifyingSender, notificationAttempted, notificationStatus]);
 
   useEffect(() => {
     if (invoiceData && signedAt && !notificationAttempted && notificationStatus === 'idle') {
-       console.log("useEffect: Triggering initial sender notification.");
+       console.log("useEffect: Triggering initial sender notification because invoiceData, signedAt are present, no attempt made, and status is idle.");
       sendNotificationToSender();
     }
   }, [invoiceData, signedAt, sendNotificationToSender, notificationAttempted, notificationStatus]);
@@ -337,12 +348,14 @@ export default function SigningCompletePageClient() {
       doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
       yPos += sectionSpacing * 1.5; 
       
-      const signatureAreaYStart = pageHeight - margin - 50; // Reserve bottom 50mm for signature block
-      if (yPos > signatureAreaYStart - sectionSpacing) { // If current content is too close or overlaps, new page
-          doc.addPage();
-          yPos = margin;
-      } else {
-          yPos = signatureAreaYStart; // Move to start of signature block area
+      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 50); // Ensure signature area is below content, or at bottom 50mm
+      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 50) { // if content ends close to where signature block starts
+           yPos = signatureAreaYStart; // move to start of signature block
+      } else if (yPos > pageHeight - margin - 50) { // if content overflows past the reserved 50mm
+           doc.addPage();
+           yPos = margin; // Start signature block at top of new page
+      } else { // Default position if content allows
+          yPos = signatureAreaYStart;
       }
       
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
@@ -378,7 +391,7 @@ export default function SigningCompletePageClient() {
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
         } else { 
             doc.setFont("helvetica", "italic"); 
-            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid]";
+            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid or Not PNG for draw]";
             addText(errorText, margin, yPos); 
             console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
             yPos += smallLineSpacing;
@@ -386,7 +399,10 @@ export default function SigningCompletePageClient() {
       } else {
         if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
         doc.setFont("helvetica", "italic"); 
-        const errorText = "[Signature Not Provided or Empty]";
+        let errorText = "[Signature Not Provided or Empty]";
+        if (signatureType === 'draw') errorText = "[Drawn Signature Data Missing or Blank]";
+        else if (signatureType === 'text') errorText = "[Typed Signature Data Missing or Blank]";
+        
         addText(errorText, margin, yPos); 
         console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
         yPos += smallLineSpacing;
@@ -410,7 +426,7 @@ export default function SigningCompletePageClient() {
     );
   }
   
-  if (!invoiceData && !error) {
+  if (!invoiceData && !error) { // If no invoice data AND no specific error yet, show loader
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
         <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
@@ -466,13 +482,16 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData} 
+          disabled={!invoiceData || !signature} // Disable if no signature data for PDF
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
         >
           <Download className="mr-2 w-5 h-5" /> Download Signed PDF
         </Button>
+        {(!signature && signatureType === 'draw') && (
+            <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve drawn signature for PDF.</p>
+        )}
       </div>
     </div>
   );

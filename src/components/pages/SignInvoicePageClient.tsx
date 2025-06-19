@@ -48,7 +48,7 @@ const mockInvoiceFallback: InvoiceData = {
 
 const BLANK_IMAGE_DATA_URL = 'data:,';
 const MIN_DATA_URL_LENGTH = 150; 
-const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData';
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; // Key for localStorage
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
   const router = useRouter();
@@ -74,15 +74,24 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         const parsedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
         parsedData.amount = parseFloat(String(parsedData.amount));
         setInvoiceData(parsedData);
+        if (parsedData.recipientName) { // Pre-fill text signature with recipient name
+            setTextSignature(parsedData.recipientName);
+        }
       } catch (e) {
         console.error("Failed to parse invoice data from URL:", e);
         setError("Invalid invoice link. Data is corrupted.");
         setInvoiceData(mockInvoiceFallback); 
+        if (mockInvoiceFallback.recipientName) {
+            setTextSignature(mockInvoiceFallback.recipientName);
+        }
         toast({ variant: "destructive", title: "Error", description: "Corrupted invoice data in link. Displaying sample." });
       }
     } else {
       console.warn(`No invoice data in URL for ID: ${invoiceId}. Using mock data.`);
       setInvoiceData(mockInvoiceFallback);
+      if (mockInvoiceFallback.recipientName) {
+        setTextSignature(mockInvoiceFallback.recipientName);
+      }
     }
   }, [invoiceId, searchParams]);
 
@@ -91,7 +100,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     setSignatureDataUrl(dataUrl);
   }, []);
   
-  const toggleAgreement = useCallback((e: React.MouseEvent) => {
+  const toggleAgreement = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setAgreementChecked(prev => !prev);
@@ -109,27 +118,27 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     if (hasSignature && agreementChecked) {
       setSignButtonText('✅ Sign Invoice Now');
       setSignButtonDisabled(false);
-      setSignButtonStyle({ backgroundColor: '#10B981', cursor: 'pointer', opacity: '1' });
+      setSignButtonStyle({ backgroundColor: '#10B981', cursor: 'pointer', opacity: '1' }); // accent
       setSignatureStatusText('✓ Ready to sign!');
-      setSignatureStatusColor('#10B981');
+      setSignatureStatusColor('hsl(var(--accent))');
     } else if (hasSignature && !agreementChecked) {
       setSignButtonText('📋 Please agree to terms below');
       setSignButtonDisabled(true);
-      setSignButtonStyle({ backgroundColor: '#F59E0B', cursor: 'not-allowed', opacity: '0.7' });
+      setSignButtonStyle({ backgroundColor: '#F59E0B', cursor: 'not-allowed', opacity: '0.7' }); // destructive (orange)
       setSignatureStatusText('⚠️ Please check the agreement box');
-      setSignatureStatusColor('#F59E0B');
+      setSignatureStatusColor('hsl(var(--destructive))');
     } else if (!hasSignature && agreementChecked) {
       setSignButtonText(useTextSignature ? '✍️ Please type your signature' : '✍️ Please draw your signature above');
       setSignButtonDisabled(true);
-      setSignButtonStyle({ backgroundColor: '#3B82F6', cursor: 'not-allowed', opacity: '0.7' });
+      setSignButtonStyle({ backgroundColor: '#3B82F6', cursor: 'not-allowed', opacity: '0.7' }); // primary
       setSignatureStatusText(useTextSignature ? '✍️ Type your signature in the box above' : '✍️ Draw your signature in the box above');
-      setSignatureStatusColor('#3B82F6');
+      setSignatureStatusColor('hsl(var(--primary))');
     } else {
       setSignButtonText('⏸️ Complete signature and agreement');
       setSignButtonDisabled(true);
-      setSignButtonStyle({ backgroundColor: '#6B7280', cursor: 'not-allowed', opacity: '0.5' });
+      setSignButtonStyle({ backgroundColor: 'hsl(var(--muted-foreground))', cursor: 'not-allowed', opacity: '0.5' });
       setSignatureStatusText('Please sign above and agree to terms');
-      setSignatureStatusColor('#6B7280');
+      setSignatureStatusColor('hsl(var(--muted-foreground))');
     }
   }, [signatureDataUrl, textSignature, useTextSignature, agreementChecked]);
 
@@ -140,6 +149,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     const hasValidSignature = isDrawSignatureActuallyMeaningful || isTextSignatureProvided;
 
     console.log('SignInvoicePageClient: handleSign called.');
+    console.log('  useTextSignature:', useTextSignature);
     console.log('  isDrawSignatureActuallyMeaningful:', isDrawSignatureActuallyMeaningful, '(URL prefix:', signatureDataUrl ? signatureDataUrl.substring(0,30) : null, ', length:', signatureDataUrl?.length, ')');
     console.log('  isTextSignatureProvided:', isTextSignatureProvided, '(Text:', textSignature, ')');
     console.log('  agreementChecked:', agreementChecked);
@@ -161,11 +171,12 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
     const signatureTypeParam = useTextSignature ? 'text' : 'draw';
     
-    let signatureForUrlParam: string | null = null;
+    let signatureForUrlParam: string | null = null; // Only for typed signature
     
-    if (useTextSignature) {
+    if (useTextSignature && isTextSignatureProvided) {
       signatureForUrlParam = textSignature.trim();
-    } else if (isDrawSignatureActuallyMeaningful && signatureDataUrl) {
+      console.log('SignInvoicePageClient: Storing typed signature for URL param:', signatureForUrlParam);
+    } else if (!useTextSignature && isDrawSignatureActuallyMeaningful && signatureDataUrl) {
       // Store drawn signature in localStorage instead of URL param
       try {
         localStorage.setItem(TEMP_DRAWN_SIGNATURE_KEY, signatureDataUrl);
@@ -176,21 +187,27 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         setIsLoading(false);
         return;
       }
+    } else {
+        console.warn('SignInvoicePageClient: No valid signature data to store or pass.');
+        // This case should ideally be caught by earlier checks, but as a safeguard:
+        setIsLoading(false);
+        toast({ variant: "destructive", title: "Signature Error", description: "Could not process signature data." });
+        return;
     }
     
     console.log('SignInvoicePageClient: Preparing to navigate. Drawn signature (if any) stored in localStorage.');
     console.log('SignInvoicePageClient: signatureForUrlParam (for typed sig):', signatureForUrlParam ? signatureForUrlParam.substring(0,50) : 'null');
-
 
     setTimeout(() => {
       setIsLoading(false);
       
       let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
       if (invoiceData) {
-        const dataToPass = { ...invoiceData };
+        const dataToPass = { ...invoiceData }; // Pass a copy
         url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
       }
 
+      // Only add &signature= if it's a typed signature and has a value
       if (useTextSignature && signatureForUrlParam) { 
         url += `&signature=${encodeURIComponent(signatureForUrlParam)}`;
       }
@@ -199,9 +216,9 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       url += `&signedAt=${encodeURIComponent(signedAt)}`;
       url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
       
-      console.log('SignInvoicePageClient: Navigating to URL:', url.substring(0, 200) + '...');
+      console.log('SignInvoicePageClient: Navigating to URL:', url.substring(0, 300) + (url.length > 300 ? '...' : ''));
       router.push(url);
-    }, 1500); // Reduced timeout slightly
+    }, 1500);
   };
 
   if (error && !invoiceData) { 
@@ -227,7 +244,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-0 animate-fadeIn">
-      <Card className="bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border">
+      <Card className="bg-card shadow-card-shadow rounded-xl overflow-hidden border border-border">
         <CardHeader className="bg-primary/5 p-6 border-b border-primary/10">
           <div className="flex items-center justify-center space-x-3">
             <FileText className="w-10 h-10 text-primary" />
@@ -245,7 +262,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
               <p className="text-muted-foreground">{invoiceData.senderEmail}</p>
               {invoiceData.senderAddress && <p className="text-muted-foreground text-xs mt-1">{invoiceData.senderAddress}</p>}
             </div>
-            <div className="md:text-left md:pl-0">
+            <div className="md:text-left md:pl-0"> {/* Was md:text-right */}
               <h3 className="font-semibold text-foreground mb-2 flex items-center"><UserCircle size={16} className="mr-2 text-muted-foreground" />TO:</h3>
               <p className="text-foreground font-medium">{invoiceData.recipientName}</p>
               <p className="text-muted-foreground">{invoiceData.recipientEmail}</p>
@@ -301,7 +318,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         </CardContent>
       </Card>
 
-      <Card className="mt-8 bg-card-white shadow-card-shadow rounded-xl overflow-hidden border border-border signature-section">
+      <Card className="mt-8 bg-card shadow-card-shadow rounded-xl overflow-hidden border border-border signature-section">
         <CardHeader className="bg-purple-accent-DEFAULT/5 p-6 border-b border-purple-accent-DEFAULT/10">
           <CardTitle className="text-2xl font-modern-sans text-purple-accent-DEFAULT text-center">Please Review and Sign Below</CardTitle>
         </CardHeader>
@@ -309,7 +326,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
           <div className="flex items-center space-x-2 mb-4">
             <Button 
               variant={!useTextSignature ? "default" : "outline"} 
-              onClick={() => setUseTextSignature(false)}
+              onClick={() => { setUseTextSignature(false); setSignatureDataUrl(null); /* Clear drawn sig when switching */ }}
               className={`flex-1 min-h-[44px] ${!useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all`}
             >
               <Edit className="mr-2 h-4 w-4" /> Draw Signature
@@ -325,7 +342,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
           {useTextSignature ? (
             <div>
-              <Label htmlFor="textSignature" className="text-text-dark font-semibold">Type your full name:</Label>
+              <Label htmlFor="textSignature" className="text-foreground font-semibold">Type your full name:</Label>
               <Input 
                 id="textSignature"
                 placeholder="Your Full Legal Name"
@@ -342,23 +359,22 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             </div>
           )}
           
-          <div id="signature-status" className="signature-status text-center my-2" style={{ color: signatureStatusColor }}>
+          <div id="signature-status" className="signature-status text-center my-2 text-sm font-medium" style={{ color: signatureStatusColor }}>
             {signatureStatusText}
           </div>
           
           <div className="agreement-section" onClick={toggleAgreement} style={{ cursor: 'pointer' }}>
-            <div className="checkbox-container flex items-center space-x-3">
+            <div className="checkbox-container flex items-center space-x-3 p-2 rounded-md hover:bg-muted transition-colors">
               <div 
                 id="custom-checkbox" 
                 role="checkbox"
                 aria-checked={agreementChecked}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') toggleAgreement(e as any);}}
-                className={`custom-checkbox w-5 h-5 border-2 rounded-sm flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${agreementChecked ? 'bg-primary border-primary' : 'bg-card border-primary/50'}`}
+                className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 transition-all ${agreementChecked ? 'bg-primary border-primary' : 'bg-card border-primary/50'}`}
               >
                 {agreementChecked && <Check className="w-3.5 h-3.5" />}
               </div>
-              <input type="checkbox" id="agreement-checkbox" checked={agreementChecked} onChange={() => {}} className="sr-only" />
               <Label htmlFor="agreement-checkbox" className="text-sm text-muted-foreground leading-relaxed select-none cursor-pointer">
                 I, <span className="font-semibold text-foreground">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
               </Label>
@@ -372,7 +388,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             onClick={handleSign} 
             disabled={isLoading || signButtonDisabled}
             className="w-full text-lg py-3 min-h-[50px] font-semibold rounded-xl shadow-button-hover-blue transition-all duration-300 active:scale-95"
-            style={isLoading ? { backgroundColor: '#A0AEC0', cursor: 'wait', opacity: '0.7', color: 'white' } : signButtonStyle}
+            style={isLoading ? { backgroundColor: 'hsl(var(--muted-foreground))', cursor: 'wait', opacity: '0.7', color: 'hsl(var(--background))' } : signButtonStyle}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
