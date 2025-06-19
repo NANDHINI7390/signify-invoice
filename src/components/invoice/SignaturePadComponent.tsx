@@ -10,9 +10,7 @@ interface SignaturePadComponentProps {
   onSignatureChange: (dataUrl: string | null) => void;
 }
 
-// A reasonable minimum length for a data URL that actually contains some drawing.
-// 'data:image/png;base64,' is about 22 chars. A tiny PNG might be ~100-150 chars.
-const MIN_MEANINGFUL_DATA_URL_LENGTH = 150;
+const MIN_MEANINGFUL_DATA_URL_LENGTH = 150; // For PNG, after 'data:image/png;base64,'
 
 export default function SignaturePadComponent({ onSignatureChange }: SignaturePadComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,29 +20,45 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   const placeholderRef = useRef<HTMLDivElement>(null);
 
   const updateSignatureState = useCallback(() => {
-    if (signaturePadInstanceRef.current) {
+    if (signaturePadInstanceRef.current && canvasRef.current) {
       const pad = signaturePadInstanceRef.current;
-      const isEmptyByLibrary = pad.isEmpty();
+      const originalCanvas = canvasRef.current;
       let dataUrlToSend: string | null = null;
 
-      if (!isEmptyByLibrary) {
-        const currentDataUrl = pad.toDataURL('image/png');
-        // Further check: even if library says not empty, ensure data URL is meaningful
-        if (currentDataUrl && currentDataUrl !== 'data:,' && currentDataUrl.length > MIN_MEANINGFUL_DATA_URL_LENGTH) {
-          dataUrlToSend = currentDataUrl;
-          console.log('SignaturePadComponent: Pad has meaningful content. Sending Data URL (prefix & length):', dataUrlToSend.substring(0, 50) + '...', dataUrlToSend.length);
-          if (placeholderRef.current) placeholderRef.current.style.display = 'none';
+      if (!pad.isEmpty()) {
+        // Create a new canvas, fill with white, draw signature, then export
+        const cleanCanvas = document.createElement('canvas');
+        cleanCanvas.width = originalCanvas.width;
+        cleanCanvas.height = originalCanvas.height;
+        const cleanCtx = cleanCanvas.getContext('2d');
+
+        if (cleanCtx) {
+          cleanCtx.fillStyle = '#FFFFFF'; // Opaque white background
+          cleanCtx.fillRect(0, 0, cleanCanvas.width, cleanCanvas.height);
+          cleanCtx.drawImage(originalCanvas, 0, 0); // Draw the (transparent) signature onto the white background
+          
+          const currentDataUrl = cleanCanvas.toDataURL('image/png', 1.0); // Export as PNG with high quality
+
+          // Further check: ensure data URL is meaningful
+          if (currentDataUrl && currentDataUrl !== 'data:,' && currentDataUrl.length > MIN_MEANINGFUL_DATA_URL_LENGTH) {
+            dataUrlToSend = currentDataUrl;
+            console.log('SignaturePadComponent: Pad has meaningful content. Sending PNG Data URL (prefix & length):', dataUrlToSend.substring(0, 50) + '...', dataUrlToSend.length);
+            if (placeholderRef.current) placeholderRef.current.style.display = 'none';
+          } else {
+            console.log(`SignaturePadComponent: Pad.isEmpty() is false, but cleanCanvas.toDataURL gave trivial data (url: ${currentDataUrl?.substring(0,30)}, len: ${currentDataUrl?.length}). Treating as empty. Sending null.`);
+            if (placeholderRef.current) placeholderRef.current.style.display = 'block';
+          }
         } else {
-          console.log(`SignaturePadComponent: Pad.isEmpty() is false, but toDataURL gave trivial data (url: ${currentDataUrl?.substring(0,30)}, len: ${currentDataUrl?.length}). Treating as empty. Sending null.`);
-          if (placeholderRef.current) placeholderRef.current.style.display = 'block';
+            console.error('SignaturePadComponent: Could not get 2D context from cleanCanvas. Sending null.');
+            if (placeholderRef.current) placeholderRef.current.style.display = 'block';
         }
       } else {
         console.log('SignaturePadComponent: Pad is truly empty (isEmpty() is true). Sending null.');
         if (placeholderRef.current) placeholderRef.current.style.display = 'block';
       }
-      onSignatureChange(dataUrlToSend); // This will send null if conditions above aren't met
+      onSignatureChange(dataUrlToSend);
     } else {
-      console.log('SignaturePadComponent: Pad instance not found, sending null.');
+      console.log('SignaturePadComponent: Pad instance or canvas not found, sending null.');
       onSignatureChange(null);
       if (placeholderRef.current) placeholderRef.current.style.display = 'block';
     }
@@ -56,7 +70,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
-      // Try to save signature data as points array for more robust restoration
       const currentSignaturePoints = pad.isEmpty() ? null : pad.toData();
 
       canvas.style.width = `${wrapperRef.current.offsetWidth}px`;
@@ -72,11 +85,9 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       
       pad.clear(); 
       if (currentSignaturePoints && currentSignaturePoints.length > 0) {
-         // Important: Ensure the pad's internal state (like _isEmpty) is updated after fromData
          pad.fromData(currentSignaturePoints);
       }
-      // After resize and potential data restoration, update state
-      updateSignatureState();
+      updateSignatureState(); // Update state after resize/restore
     }
   }, [updateSignatureState]);
 
@@ -84,12 +95,12 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgb(255, 255, 255)', // Opaque white background for the canvas data
+        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent background on the drawing canvas
         penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75,
         maxWidth: 2.5,
-        throttle: 16, // (ms) Draw the next point at most once per every x milliseconds
-        minDistance: 5, // (px) Minimal distance between two points
+        throttle: 16,
+        minDistance: 5,
         onBegin: () => {
           setIsDrawing(true);
           if (placeholderRef.current) placeholderRef.current.style.display = 'none';
@@ -103,8 +114,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       signaturePadInstanceRef.current = pad;
       
       resizeCanvas(); // Initial resize and state update
-      // updateSignatureState(); // Called by resizeCanvas
-
+      
       window.addEventListener('resize', resizeCanvas);
       
       return () => {
@@ -159,3 +169,4 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   );
 }
 
+    

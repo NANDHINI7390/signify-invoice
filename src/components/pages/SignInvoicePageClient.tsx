@@ -46,8 +46,9 @@ const mockInvoiceFallback: InvoiceData = {
   ]
 };
 
-const BLANK_IMAGE_DATA_URL = 'data:,'; // Represents a truly blank image, often from an empty canvas
-const MIN_DATA_URL_LENGTH = 100; // Arbitrary minimum length for a non-trivial PNG data URL
+const BLANK_IMAGE_DATA_URL = 'data:,';
+const MIN_DATA_URL_LENGTH = 150; 
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData';
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
   const router = useRouter();
@@ -80,7 +81,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         toast({ variant: "destructive", title: "Error", description: "Corrupted invoice data in link. Displaying sample." });
       }
     } else {
-      console.warn(\`No invoice data in URL for ID: \${invoiceId}. Using mock data.\`);
+      console.warn(`No invoice data in URL for ID: ${invoiceId}. Using mock data.`);
       setInvoiceData(mockInvoiceFallback);
     }
   }, [invoiceId, searchParams]);
@@ -101,7 +102,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
     const hasSignature = isDrawSignatureMeaningful || isTextSignatureProvided;
     
-    console.log('SignInvoicePageClient useEffect: signatureDataUrl:', signatureDataUrl ? signatureDataUrl.substring(0,30) : null, 'length:', signatureDataUrl?.length);
+    console.log('SignInvoicePageClient useEffect: signatureDataUrl (prefix & length):', signatureDataUrl ? signatureDataUrl.substring(0,30) : 'null', 'length:', signatureDataUrl?.length);
     console.log('SignInvoicePageClient useEffect: isDrawSignatureMeaningful:', isDrawSignatureMeaningful, 'isTextSignatureProvided:', isTextSignatureProvided, 'agreementChecked:', agreementChecked);
 
 
@@ -143,7 +144,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     console.log('  isTextSignatureProvided:', isTextSignatureProvided, '(Text:', textSignature, ')');
     console.log('  agreementChecked:', agreementChecked);
 
-
     if (!agreementChecked) {
       toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
       return;
@@ -158,41 +158,50 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     
     const signedAt = new Date().toISOString();
     const signedUserAgent = navigator.userAgent;
-
     const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
+    const signatureTypeParam = useTextSignature ? 'text' : 'draw';
     
-    let signatureToSend: string | null = null;
+    let signatureForUrlParam: string | null = null;
+    
     if (useTextSignature) {
-      signatureToSend = textSignature.trim();
-    } else if (isDrawSignatureActuallyMeaningful) {
-      signatureToSend = signatureDataUrl;
+      signatureForUrlParam = textSignature.trim();
+    } else if (isDrawSignatureActuallyMeaningful && signatureDataUrl) {
+      // Store drawn signature in localStorage instead of URL param
+      try {
+        localStorage.setItem(TEMP_DRAWN_SIGNATURE_KEY, signatureDataUrl);
+        console.log('SignInvoicePageClient: Stored drawn signature in localStorage (key:', TEMP_DRAWN_SIGNATURE_KEY, 'length:', signatureDataUrl.length, ')');
+      } catch (e) {
+        console.error('SignInvoicePageClient: Failed to store signature in localStorage', e);
+        toast({ variant: "destructive", title: "Storage Error", description: "Could not temporarily save signature." });
+        setIsLoading(false);
+        return;
+      }
     }
     
-    console.log('SignInvoicePageClient: Preparing to navigate. signatureToSend (prefix & length):', signatureToSend ? signatureToSend.substring(0,50) + '...' : null, signatureToSend ? signatureToSend.length : 0);
+    console.log('SignInvoicePageClient: Preparing to navigate. Drawn signature (if any) stored in localStorage.');
+    console.log('SignInvoicePageClient: signatureForUrlParam (for typed sig):', signatureForUrlParam ? signatureForUrlParam.substring(0,50) : 'null');
 
 
     setTimeout(() => {
       setIsLoading(false);
       
-      const signatureTypeParam = useTextSignature ? 'text' : 'draw';
-
-      let url = \`/signing-complete?invoiceId=\${encodeURIComponent(finalInvoiceId)}\`;
+      let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
       if (invoiceData) {
         const dataToPass = { ...invoiceData };
-        url += \`&data=\${encodeURIComponent(JSON.stringify(dataToPass))}\`;
+        url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
       }
 
-      if (signatureToSend) { 
-        url += \`&signature=\${encodeURIComponent(signatureToSend)}\`;
+      if (useTextSignature && signatureForUrlParam) { 
+        url += `&signature=${encodeURIComponent(signatureForUrlParam)}`;
       }
       
-      url += \`&signatureType=\${signatureTypeParam}\`;
-      url += \`&signedAt=\${encodeURIComponent(signedAt)}\`;
-      url += \`&signedUserAgent=\${encodeURIComponent(signedUserAgent)}\`;
+      url += `&signatureType=${signatureTypeParam}`;
+      url += `&signedAt=${encodeURIComponent(signedAt)}`;
+      url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
       
       console.log('SignInvoicePageClient: Navigating to URL:', url.substring(0, 200) + '...');
       router.push(url);
-    }, 2000);
+    }, 1500); // Reduced timeout slightly
   };
 
   if (error && !invoiceData) { 
@@ -301,14 +310,14 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             <Button 
               variant={!useTextSignature ? "default" : "outline"} 
               onClick={() => setUseTextSignature(false)}
-              className={\`flex-1 min-h-[44px] \${!useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all\`}
+              className={`flex-1 min-h-[44px] ${!useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all`}
             >
               <Edit className="mr-2 h-4 w-4" /> Draw Signature
             </Button>
             <Button 
               variant={useTextSignature ? "default" : "outline"} 
               onClick={() => setUseTextSignature(true)}
-              className={\`flex-1 min-h-[44px] \${useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all\`}
+              className={`flex-1 min-h-[44px] ${useTextSignature ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"} active:scale-95 transition-all`}
             >
               <Edit className="mr-2 h-4 w-4" /> Type Signature
             </Button>
@@ -345,7 +354,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
                 aria-checked={agreementChecked}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') toggleAgreement(e as any);}}
-                className={\`custom-checkbox w-5 h-5 border-2 rounded-sm flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 \${agreementChecked ? 'bg-primary border-primary' : 'bg-card border-primary/50'}\`}
+                className={`custom-checkbox w-5 h-5 border-2 rounded-sm flex items-center justify-center text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${agreementChecked ? 'bg-primary border-primary' : 'bg-card border-primary/50'}`}
               >
                 {agreementChecked && <Check className="w-3.5 h-3.5" />}
               </div>
@@ -377,3 +386,5 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
+
+    

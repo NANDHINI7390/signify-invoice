@@ -2,13 +2,14 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Download, AlertTriangle, Loader2, CalendarDays, Smartphone, Monitor } from 'lucide-react';
+import { Download, AlertTriangle, Loader2, CalendarDays, Smartphone, Monitor, MailCheck, MailWarning, RefreshCcw } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import AnimatedCheckmark from '@/components/animations/AnimatedCheckmark';
 import { toast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import { format as formatDateFn } from 'date-fns';
+import emailjs from '@emailjs/browser';
 
 interface InvoiceData {
   invoiceNumber: string;
@@ -30,7 +31,43 @@ const currencySymbols: { [key: string]: string } = {
 };
 
 const BLANK_IMAGE_DATA_URL = 'data:,';
-const MIN_DATA_URL_LENGTH = 100; 
+const MIN_DATA_URL_LENGTH = 150; 
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData';
+
+const SenderNotificationStatus = ({ status, onRetry }: { status: 'pending' | 'success' | 'error' | 'idle' | 'retrying', onRetry: () => void }) => {
+  if (status === 'idle') return null;
+
+  let icon = <Loader2 size={14} className="mr-1.5 animate-spin" />;
+  let text = "Notifying sender...";
+  let color = "text-muted-foreground";
+
+  if (status === 'success') {
+    icon = <MailCheck size={14} className="mr-1.5 text-accent" />;
+    text = "Sender notified successfully.";
+    color = "text-accent";
+  } else if (status === 'error') {
+    icon = <MailWarning size={14} className="mr-1.5 text-destructive" />;
+    text = "Failed to notify sender.";
+    color = "text-destructive";
+  } else if (status === 'retrying') {
+    icon = <Loader2 size={14} className="mr-1.5 animate-spin" />;
+    text = "Retrying notification...";
+    color = "text-muted-foreground";
+  }
+
+
+  return (
+    <div className={`text-xs mt-1 mb-3 animate-fadeIn flex items-center justify-center ${color}`} style={{ animationDelay: '2.9s' }}>
+      {icon}
+      <span>{text}</span>
+      {status === 'error' && (
+        <Button variant="link" size="sm" onClick={onRetry} className="ml-2 h-auto p-0 text-xs text-primary hover:underline">
+           <RefreshCcw size={12} className="mr-1"/> Retry
+        </Button>
+      )}
+    </div>
+  );
+};
 
 
 export default function SigningCompletePageClient() {
@@ -42,18 +79,43 @@ export default function SigningCompletePageClient() {
   const [error, setError] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<string | null>(null);
   const [signedUserAgent, setSignedUserAgent] = useState<string | null>(null);
+  
+  const [isNotifyingSender, setIsNotifyingSender] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<'idle' | 'pending' | 'success' | 'error' | 'retrying'>('idle');
+  const [notificationAttempted, setNotificationAttempted] = useState(false);
+
 
   const invoiceId = searchParams.get('invoiceId');
 
   useEffect(() => {
     const dataString = searchParams.get('data');
-    const sigString = searchParams.get('signature');
     const sigType = searchParams.get('signatureType') as 'draw' | 'text' | null;
     const signedAtParam = searchParams.get('signedAt');
     const signedUserAgentParam = searchParams.get('signedUserAgent');
 
-    console.log('SigningCompletePageClient useEffect: Received sigString (prefix & length):', sigString ? sigString.substring(0,50) + '...' : null, sigString ? sigString.length : 0);
-    console.log('SigningCompletePageClient useEffect: Received sigType:', sigType);
+    let sigValue: string | null = null;
+
+    if (sigType === 'draw') {
+      try {
+        sigValue = localStorage.getItem(TEMP_DRAWN_SIGNATURE_KEY);
+        if (sigValue) {
+          console.log('SigningCompletePageClient useEffect: Retrieved drawn signature from localStorage (length:', sigValue.length, ')');
+          localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); // Clean up
+        } else {
+          console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
+        }
+      } catch (e) {
+        console.error('SigningCompletePageClient useEffect: Error accessing localStorage for signature', e);
+      }
+    } else if (sigType === 'text') {
+      sigValue = searchParams.get('signature');
+      if (sigValue) {
+        sigValue = decodeURIComponent(sigValue);
+        console.log('SigningCompletePageClient useEffect: Retrieved typed signature from URL params:', sigValue);
+      }
+    }
+    
+    console.log('SigningCompletePageClient useEffect: sigType:', sigType, 'sigValue (prefix & length):', sigValue ? sigValue.substring(0,50) + '...' : null, sigValue ? sigValue.length : 0);
 
 
     if (dataString) {
@@ -71,10 +133,10 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
-    if (sigString && sigString !== BLANK_IMAGE_DATA_URL && sigString.length > MIN_DATA_URL_LENGTH) {
-        setSignature(decodeURIComponent(sigString));
+    if (sigValue && sigValue !== BLANK_IMAGE_DATA_URL && sigValue.length > MIN_DATA_URL_LENGTH) {
+        setSignature(sigValue); // No need to decodeURIComponent if it's from localStorage or already decoded
     } else {
-        console.log('SigningCompletePageClient useEffect: sigString is blank or too short, setting signature to null.');
+        console.log('SigningCompletePageClient useEffect: sigValue is blank or too short, setting signature to null.');
         setSignature(null); 
     }
     
@@ -87,11 +149,11 @@ export default function SigningCompletePageClient() {
 
   useEffect(() => {
     let i = 0;
-    const textToType = \`Invoice \${invoiceId || ''} signed successfully!\`;
+    const textToType = `Invoice ${invoiceId || ''} signed successfully!`;
     const element = document.getElementById('typewriter-heading');
     if (element) {
-        element.style.setProperty('--typewriter-chars', \`\${textToType.length}ch\`);
-        element.style.setProperty('--typewriter-steps', \`\${textToType.length}\`);
+        element.style.setProperty('--typewriter-chars', `${textToType.length}ch`);
+        element.style.setProperty('--typewriter-steps', `${textToType.length}`);
     }
     setTypewriterText(textToType);
   }, [invoiceId]);
@@ -106,20 +168,80 @@ export default function SigningCompletePageClient() {
     }
     return "Desktop Device";
   };
+  
+  const sendNotificationToSender = useCallback(async () => {
+    if (!invoiceData || !signedAt || isNotifyingSender) {
+      console.log("sendNotificationToSender: Aborting - missing data, already notifying, or already attempted.");
+      if (!notificationAttempted) setNotificationStatus('idle'); // Only reset to idle if not attempted
+      return;
+    }
+
+    console.log("sendNotificationToSender: Attempting to notify sender.");
+    setIsNotifyingSender(true);
+    setNotificationStatus(notificationAttempted ? 'retrying' : 'pending'); // Use 'retrying' if it's a retry
+    setNotificationAttempted(true); // Mark that an attempt is being made/has been made
+
+    const SENDER_NOTIFY_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID;
+    const SENDER_NOTIFY_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID;
+    const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+
+    if (!SENDER_NOTIFY_SERVICE_ID || !SENDER_NOTIFY_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+      toast({
+        variant: "destructive",
+        title: "Sender Notification Not Configured",
+        description: "EmailJS variables for sender notification are not set. Please configure NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID and NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID.",
+        duration: 8000,
+      });
+      console.warn("EmailJS for sender notification not fully configured.");
+      setIsNotifyingSender(false);
+      setNotificationStatus('error');
+      return;
+    }
+
+    const templateParams = {
+      sender_name: invoiceData.senderName,
+      sender_email: invoiceData.senderEmail,
+      recipient_name: invoiceData.recipientName,
+      invoice_number: invoiceData.invoiceNumber,
+      signed_date: formatDateFn(new Date(signedAt), 'PPP p'),
+      // Add any other relevant details for the sender notification template
+    };
+
+    try {
+      await emailjs.send(SENDER_NOTIFY_SERVICE_ID, SENDER_NOTIFY_TEMPLATE_ID, templateParams, EMAILJS_PUBLIC_KEY);
+      toast({ variant: "success", title: "Sender Notified", description: `An email has been sent to ${invoiceData.senderEmail}.` });
+      setNotificationStatus('success');
+    } catch (emailError) {
+      console.error('EmailJS sender notification error:', emailError);
+      toast({ variant: "destructive", title: "Sender Notification Failed", description: "Could not send the notification email to the sender." });
+      setNotificationStatus('error');
+    } finally {
+      setIsNotifyingSender(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceData, signedAt, isNotifyingSender, notificationAttempted]);
+
+  useEffect(() => {
+    if (invoiceData && signedAt && !notificationAttempted && notificationStatus === 'idle') {
+       console.log("useEffect: Triggering initial sender notification.");
+      sendNotificationToSender();
+    }
+  }, [invoiceData, signedAt, sendNotificationToSender, notificationAttempted, notificationStatus]);
+
 
   const handleDownloadPdf = () => {
     if (!invoiceData) {
       toast({ variant: "destructive", title: "Error Generating PDF", description: "Invoice data is missing." });
       return;
     }
-    toast({ title: "Preparing PDF...", description: \`Generating PDF for invoice \${invoiceData.invoiceNumber}.\` });
+    toast({ title: "Preparing PDF...", description: `Generating PDF for invoice ${invoiceData.invoiceNumber}.` });
 
     console.log('SigningCompletePageClient handleDownloadPdf: Using signature (prefix & length):', signature ? signature.substring(0,50) + '...' : null, signature ? signature.length : 0);
     console.log('SigningCompletePageClient handleDownloadPdf: Using signatureType:', signatureType);
 
 
     try {
-      const doc = new jsPDF({ compress: true });
+      const doc = new jsPDF({ compress: true, orientation: 'p', unit: 'mm', format: 'a4', precision: 16 });
       const pageHeight = doc.internal.pageSize.height;
       let yPos = 20;
       const lineSpacing = 6; 
@@ -193,8 +315,8 @@ export default function SigningCompletePageClient() {
         doc.setFont("helvetica", "normal");
         invoiceData.items.forEach(item => {
             if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-            const itemText = \`\${item.description} (x\${item.quantity})\`;
-            const itemTotal = \`\${currencySymbols[invoiceData.currency] || invoiceData.currency}\${item.total.toFixed(2)}\`;
+            const itemText = `${item.description} (x${item.quantity})`;
+            const itemTotal = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${item.total.toFixed(2)}`;
             addText(itemText, margin + 2, yPos);
             addText(itemTotal, doc.internal.pageSize.width - margin - doc.getTextWidth(itemTotal), yPos);
             yPos += smallLineSpacing;
@@ -208,56 +330,70 @@ export default function SigningCompletePageClient() {
       doc.setFontSize(12); doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
       addText("TOTAL AMOUNT:", margin, yPos);
-      const amountValueText = \`\${currencySymbols[invoiceData.currency] || invoiceData.currency}\${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\`;
+      const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       const amountTextWidth = doc.getTextWidth(amountValueText);
-      const currencyTextWidth = doc.getTextWidth(\` (\${invoiceData.currency})\`);
+      const currencyTextWidth = doc.getTextWidth(` (${invoiceData.currency})`);
       doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - amountTextWidth - currencyTextWidth - 2, yPos);
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(\`(\${invoiceData.currency})\`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
       yPos += sectionSpacing * 1.5; 
       
-      if (yPos > pageHeight - margin - sectionSpacing * 4) { doc.addPage(); yPos = margin; } 
+      const signatureAreaYStart = pageHeight - margin - 50; // Reserve bottom 50mm for signature block
+      if (yPos > signatureAreaYStart - sectionSpacing) { // If current content is too close or overlaps, new page
+          doc.addPage();
+          yPos = margin;
+      } else {
+          yPos = signatureAreaYStart; // Move to start of signature block area
+      }
+      
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
       
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      addText(\`Signed by: \${invoiceData.recipientName}\`, margin, yPos); yPos += smallLineSpacing;
+      addText(`Signed by: ${invoiceData.recipientName}`, margin, yPos); yPos += smallLineSpacing;
 
       if (signedAt) {
-        addText(\`Date Signed: \${formatDateFn(new Date(signedAt), 'PPP p')}\`, margin, yPos); yPos += smallLineSpacing;
+        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, margin, yPos); yPos += smallLineSpacing;
       }
       if (signedUserAgent) {
-        addText(\`Signed Using: \${getDeviceType(signedUserAgent)}\`, margin, yPos); yPos += smallLineSpacing;
+        addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
       }
       addText("Signed IP Address: (Client-Side Context)", margin, yPos);
-      yPos += sectionSpacing;
+      yPos += sectionSpacing / 2;
 
       doc.setFont("helvetica", "bold");
       if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
       addText("Signature:", margin, yPos); yPos += smallLineSpacing;
 
+      const signatureImageWidth = 50; 
+      const signatureImageHeight = 15; 
+
       if (signature && signature !== BLANK_IMAGE_DATA_URL && signature.length > MIN_DATA_URL_LENGTH) {
-        const signatureImageWidth = 50; 
-        const signatureImageHeight = 25; 
         const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
         if (yPos + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
 
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
-          doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight); 
+          doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
           yPos += signatureImageHeight + smallLineSpacing;
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); doc.setFontSize(12);
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
         } else { 
             doc.setFont("helvetica", "italic"); 
-            addText(signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid]", margin, yPos); 
+            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid]";
+            addText(errorText, margin, yPos); 
+            console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
             yPos += smallLineSpacing;
         }
       } else {
         if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-        doc.setFont("helvetica", "italic"); addText("[Signature Not Provided or Empty]", margin, yPos); yPos += smallLineSpacing;
+        doc.setFont("helvetica", "italic"); 
+        const errorText = "[Signature Not Provided or Empty]";
+        addText(errorText, margin, yPos); 
+        console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
+        yPos += smallLineSpacing;
       }
       
-      doc.save(\`signed_invoice_\${invoiceData.invoiceNumber || 'document'}.pdf\`);
-      toast({ variant: "success", title: "Download Started", description: \`PDF for invoice \${invoiceData.invoiceNumber} should be downloading.\` });
+      doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
+      toast({ variant: "success", title: "Download Started", description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.` });
     } catch (pdfError) {
         console.error("PDF generation failed:", pdfError);
         toast({ variant: "destructive", title: "PDF Generation Failed", description: "Could not generate the PDF." });
@@ -287,7 +423,7 @@ export default function SigningCompletePageClient() {
     <div 
       className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center relative py-10 px-4"
       style={{
-        backgroundImage: \`
+        backgroundImage: `
           radial-gradient(circle, hsl(var(--background)) 60%, transparent 100%),
           repeating-linear-gradient(45deg, 
             hsl(var(--accent)/0.02), 
@@ -295,7 +431,7 @@ export default function SigningCompletePageClient() {
             transparent 10px, 
             transparent 20px
           )
-        \`, 
+        `, 
         backgroundSize: 'cover, auto',
       }}
     >
@@ -305,7 +441,7 @@ export default function SigningCompletePageClient() {
         <h1 
           id="typewriter-heading"
           className="text-2xl md:text-3xl font-bold text-foreground mb-3 font-headline whitespace-nowrap overflow-hidden animate-typewriter mx-auto"
-          style={{ width: \`\${typewriterText.length}ch\`, borderRightColor: 'hsl(var(--foreground))'}}
+          style={{ width: `${typewriterText.length}ch`, borderRightColor: 'hsl(var(--foreground))'}}
         >
           {typewriterText}
         </h1>
@@ -315,15 +451,16 @@ export default function SigningCompletePageClient() {
           </p>
         )}
          {invoiceData && signedUserAgent && (
-          <p className="text-sm text-muted-foreground mb-6 animate-fadeIn flex items-center justify-center" style={{animationDelay: '2.7s'}}>
+          <p className="text-sm text-muted-foreground mb-2 animate-fadeIn flex items-center justify-center" style={{animationDelay: '2.7s'}}>
             {getDeviceType(signedUserAgent) === "Mobile Device" ? <Smartphone size={14} className="mr-1.5"/> : <Monitor size={14} className="mr-1.5"/>}
             Device: {getDeviceType(signedUserAgent)}
           </p>
         )}
-
+        
+        <SenderNotificationStatus status={notificationStatus} onRetry={sendNotificationToSender} />
 
         <p className="text-muted-foreground mb-8 text-lg animate-fadeIn font-body" style={{animationDelay: '2.8s'}}>
-          Both parties have been notified and should receive the signed invoice via email shortly.
+          A copy of the signed invoice should be sent to both parties. You can also download it below.
         </p>
 
         <Button
@@ -340,3 +477,5 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
+
+    
