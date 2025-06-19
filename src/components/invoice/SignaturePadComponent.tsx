@@ -92,7 +92,10 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   };
 
   return (
-    <div ref={wrapperRef} className="relative w-full h-[200px] rounded-lg overflow-hidden border border-primary-blue-DEFAULT">
+    <div 
+      ref={wrapperRef} 
+      className="relative w-full h-[200px] rounded-lg overflow-hidden border border-primary-blue-DEFAULT z-40 bg-card-white" // Applied z-index and positioning
+    >
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-crosshair touch-none bg-card-white" // Ensure canvas fills the div
@@ -103,7 +106,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         variant="ghost"
         size="icon" 
         onClick={clearSignature}
-        className="absolute top-2 right-2 text-text-light hover:text-destructive-DEFAULT p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full"
+        className="absolute top-2 right-2 text-text-light hover:text-destructive-DEFAULT p-1 h-8 w-8 active:scale-90 bg-card-white/50 hover:bg-card-white/80 rounded-full z-10"
         aria-label="Clear Signature"
         disabled={!isDrawing && (signaturePadInstanceRef.current?.isEmpty() ?? true)}
       >
@@ -117,3 +120,4 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     </div>
   );
 }
+

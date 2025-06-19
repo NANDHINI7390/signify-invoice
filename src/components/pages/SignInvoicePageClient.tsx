@@ -159,6 +159,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   }
   
   const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
+  const isButtonDisabled = isLoading || !agreementChecked || (useTextSignature ? !textSignature.trim() : !signatureDataUrl);
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-0 animate-fadeIn">
@@ -272,13 +273,11 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
               {textSignature && <p className="mt-2 text-sm text-text-light">Preview: <span className="font-medium" style={{ fontFamily: 'cursive', fontSize: '1.2rem' }}>{textSignature}</span></p>}
             </div>
           ) : (
-            <div className="border border-primary-blue-DEFAULT rounded-lg p-1 bg-card-white">
-                 <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
-            </div>
+            <SignaturePadComponent onSignatureChange={handleSignatureDataChange} />
           )}
           
           <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-start space-x-3">
+            <div className="flex items-start space-x-3 relative z-50 bg-transparent"> {/* Applied z-index and positioning */}
               <Checkbox
                 id="agreement"
                 checked={agreementChecked}
@@ -299,7 +298,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         <CardFooter className="p-6 bg-background-gray border-t border-border">
           <Button 
             onClick={handleSign} 
-            disabled={isLoading || (!agreementChecked || (useTextSignature ? !textSignature.trim() : !signatureDataUrl)) }
+            disabled={isButtonDisabled}
             className="w-full text-lg py-3 min-h-[50px] gradient-button-blue-to-green text-white font-semibold rounded-xl shadow-button-hover-blue hover:transform hover:-translate-y-1 transition-all duration-300 active:scale-95"
           >
             {isLoading ? (
@@ -314,4 +313,3 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
-
