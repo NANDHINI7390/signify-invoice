@@ -55,7 +55,6 @@ const SenderNotificationStatus = ({ status, onRetry }: { status: 'pending' | 'su
     color = "text-muted-foreground";
   }
 
-
   return (
     <div className={`text-xs mt-1 mb-3 animate-fadeIn flex items-center justify-center ${color}`} style={{ animationDelay: '2.9s' }}>
       {icon}
@@ -84,7 +83,6 @@ export default function SigningCompletePageClient() {
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'pending' | 'success' | 'error' | 'retrying'>('idle');
   const [notificationAttempted, setNotificationAttempted] = useState(false);
 
-
   const invoiceId = searchParams.get('invoiceId');
 
   useEffect(() => {
@@ -110,9 +108,9 @@ export default function SigningCompletePageClient() {
         setError("Failed to retrieve drawn signature data.");
       }
     } else if (sigType === 'text') {
-      const tempSigValue = searchParams.get('signature');
-      if (tempSigValue) {
-        sigValue = decodeURIComponent(tempSigValue);
+      const tempSigValueFromParam = searchParams.get('signature');
+      if (tempSigValueFromParam) {
+        sigValue = decodeURIComponent(tempSigValueFromParam);
         console.log('SigningCompletePageClient useEffect: Retrieved typed signature from URL params:', sigValue);
       } else {
         console.warn('SigningCompletePageClient useEffect: Typed signature expected but not found in URL params.');
@@ -120,7 +118,6 @@ export default function SigningCompletePageClient() {
     }
     
     console.log('SigningCompletePageClient useEffect: sigType:', sigType, 'sigValue (prefix & length):', sigValue ? sigValue.substring(0,50) + '...' : null, sigValue ? sigValue.length : 0);
-
 
     if (dataString) {
       try {
@@ -143,9 +140,9 @@ export default function SigningCompletePageClient() {
     } else {
         console.log('SigningCompletePageClient useEffect: sigValue is blank, too short, or null. Setting signature to null. Actual sigValue prefix:', sigValue ? sigValue.substring(0,30) : "null");
         setSignature(null); 
-        if (sigType === 'draw' && !sigValue) { // If drawn signature was expected but not found/retrieved
-          // setError is already handled above if localStorage fails
-        } else if (sigValue) { // If it was present but trivial
+        if (sigType === 'draw' && !sigValue && !error) { // Only set error if not already set for other reasons
+          setError("Drawn signature data not found after signing. It might have been cleared or not saved correctly.");
+        } else if (sigValue && !error) { // If it was present but trivial and no other error set
            setError(`Invalid or empty ${sigType} signature data received.`);
         }
     }
@@ -154,6 +151,7 @@ export default function SigningCompletePageClient() {
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]); // Only searchParams dependency
 
 
@@ -182,9 +180,8 @@ export default function SigningCompletePageClient() {
   const sendNotificationToSender = useCallback(async () => {
     if (!invoiceData || !signedAt || isNotifyingSender || notificationStatus === 'success' || notificationStatus === 'pending' || notificationStatus === 'retrying') {
       console.log("sendNotificationToSender: Aborting - missing data, already notifying, already succeeded, or an attempt is in progress.", { hasInvoiceData: !!invoiceData, hasSignedAt: !!signedAt, isNotifyingSender, notificationStatus });
-      if (!notificationAttempted && notificationStatus !== 'pending' && notificationStatus !== 'retrying') {
-        // Only set to idle if no attempt was made and it's not currently trying
-        // setNotificationStatus('idle'); // This might cause loops if invoiceData/signedAt are not ready yet
+      if (!notificationAttempted && notificationStatus !== 'pending' && notificationStatus !== 'retrying' && notificationStatus !== 'success') {
+        setNotificationStatus('idle'); 
       }
       return;
     }
@@ -202,7 +199,7 @@ export default function SigningCompletePageClient() {
       toast({
         variant: "destructive",
         title: "Sender Notification Not Configured",
-        description: "EmailJS variables for sender notification are not set. Required: NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
+        description: "EmailJS variables for sender notification are not set. Check NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
         duration: 8000,
       });
       console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local");
@@ -348,13 +345,13 @@ export default function SigningCompletePageClient() {
       doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
       yPos += sectionSpacing * 1.5; 
       
-      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 50); // Ensure signature area is below content, or at bottom 50mm
-      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 50) { // if content ends close to where signature block starts
-           yPos = signatureAreaYStart; // move to start of signature block
-      } else if (yPos > pageHeight - margin - 50) { // if content overflows past the reserved 50mm
+      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 60); 
+      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 60) { 
+           yPos = signatureAreaYStart; 
+      } else if (yPos > pageHeight - margin - 60) { 
            doc.addPage();
-           yPos = margin; // Start signature block at top of new page
-      } else { // Default position if content allows
+           yPos = margin; 
+      } else { 
           yPos = signatureAreaYStart;
       }
       
@@ -391,7 +388,7 @@ export default function SigningCompletePageClient() {
           yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
         } else { 
             doc.setFont("helvetica", "italic"); 
-            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Blank]" : "[Text Signature Data Invalid or Not PNG for draw]";
+            const errorText = signatureType === 'draw' ? "[Drawn Signature Data Invalid or Not PNG]" : "[Text Signature Data Invalid]";
             addText(errorText, margin, yPos); 
             console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
             yPos += smallLineSpacing;
@@ -426,7 +423,7 @@ export default function SigningCompletePageClient() {
     );
   }
   
-  if (!invoiceData && !error) { // If no invoice data AND no specific error yet, show loader
+  if (!invoiceData && !error) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
         <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
@@ -482,7 +479,7 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData || !signature} // Disable if no signature data for PDF
+          disabled={!invoiceData || (!signature && signatureType === 'draw') || (!signature && signatureType === 'text')}
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
@@ -492,9 +489,9 @@ export default function SigningCompletePageClient() {
         {(!signature && signatureType === 'draw') && (
             <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve drawn signature for PDF.</p>
         )}
+         {error && <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>{error}</p>}
       </div>
     </div>
   );
 }
-
     
