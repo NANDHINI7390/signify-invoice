@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,10 +10,6 @@ import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import emailjs from '@emailjs/browser';
-
-const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
-const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
-const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
 
 interface InvoiceData {
   senderName: string;
@@ -80,6 +77,10 @@ export default function InvoicePreviewPageClient() {
     const formattedDate = invoiceData.invoiceDate ? format(new Date(invoiceData.invoiceDate), 'PPP') : 'N/A';
     const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
 
+    const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+    const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
+    const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
+
     const templateParams = {
       to_email: invoiceData.recipientEmail,
       to_name: invoiceData.recipientName,
@@ -98,15 +99,17 @@ export default function InvoicePreviewPageClient() {
        toast({
         variant: "destructive",
         title: "EmailJS Not Fully Configured",
-        description: "EmailJS environment variables are not set. Please configure them in Vercel or your .env.local file.",
+        description: "EmailJS environment variables are not set. Please configure them in Vercel or your .env.local file. Check NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
         duration: 7000,
       });
       console.warn("EmailJS not fully configured. Check Vercel environment variables or .env.local: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
       setTimeout(() => {
-        router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
+        if (invoiceData) { // Ensure invoiceData is still valid
+            router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
+        }
         setIsSending(false);
       }, 1500);
-      return;
+      return; // Added missing return statement
     }
 
     try {
@@ -225,8 +228,9 @@ export default function InvoicePreviewPageClient() {
               {isSending ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
-                <Send className="mr-2 h-5 w-5" />}
-              {isSending ? 'Sending...' : 'Confirm &amp; Send Signing Link'}
+                <Send className="mr-2 h-5 w-5" />
+              )}
+              {isSending ? 'Sending...' : 'Confirm & Send Signing Link'}
             </Button>
           </div>
         </CardContent>
