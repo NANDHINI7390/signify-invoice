@@ -116,20 +116,13 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     // Simulate API call
     setTimeout(() => {
       setIsLoading(false);
-      // Here, you would typically send the signatureDataUrl or textSignature to your backend
-      // And trigger PDF generation and emailing.
-      // For now, we navigate to signing complete page.
       const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
       const signatureToSend = useTextSignature ? textSignature : signatureDataUrl;
       const signatureType = useTextSignature ? 'text' : 'draw';
 
       let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
       if (invoiceData) {
-        // Make sure all relevant data is passed for PDF generation
-        const dataToPass = {
-          ...invoiceData,
-          // Add any other fields that might be missing but needed for the PDF
-        };
+        const dataToPass = { ...invoiceData };
         url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
       }
       if (signatureToSend) {
@@ -141,7 +134,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     }, 2000);
   };
 
-  if (error && !invoiceData) { // Only show full error state if invoiceData also couldn't be set to mock
+  if (error && !invoiceData) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
         <AlertTriangle className="w-16 h-16 text-destructive-DEFAULT mb-4" />
@@ -284,15 +277,16 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
               htmlFor="agreement"
               id="agreement-label"
               className="flex items-start space-x-3 text-sm text-text-light leading-relaxed cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              onClick={() => setAgreementChecked(prev => !prev)} // Explicitly toggle state on label click
             >
               <Checkbox
                 id="agreement"
                 checked={agreementChecked}
-                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)}
+                onCheckedChange={(checked) => setAgreementChecked(checked as boolean)} // This will still work and is good for accessibility
                 className="data-[state=checked]:bg-primary-blue-DEFAULT data-[state=checked]:border-primary-blue-DEFAULT data-[state=checked]:text-white transition-all duration-200 w-5 h-5 rounded mt-1 shrink-0"
                 aria-labelledby="agreement-label"
               />
-              <span className="flex-1">
+              <span className="flex-1"> {/* Wrap text in a span to ensure proper click area */}
                 I, <span className="font-semibold text-text-dark">{invoiceData.recipientName}</span>, agree that my electronic signature is the legal equivalent of my manual signature on this invoice and that I have reviewed and agree to its terms.
               </span>
             </Label>
