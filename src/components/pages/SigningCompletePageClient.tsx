@@ -2,7 +2,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Download, AlertTriangle } from 'lucide-react';
+import { Download, AlertTriangle, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import AnimatedCheckmark from '@/components/animations/AnimatedCheckmark';
@@ -166,17 +166,19 @@ export default function SigningCompletePageClient() {
       if (invoiceData.senderAddress) {
         const addressLines = doc.splitTextToSize(invoiceData.senderAddress, contentWidth / 2 - 10);
         addressLines.forEach((line: string) => {
+            if (tempY > pageHeight - margin - lineSpacing) { doc.addPage(); tempY = margin; }
             addText(line, senderX, tempY); tempY+=lineSpacing;
         });
       }
       if (invoiceData.senderPhone) {
+        if (tempY > pageHeight - margin - lineSpacing) { doc.addPage(); tempY = margin; }
         addText(invoiceData.senderPhone, senderX, tempY);
         tempY += lineSpacing;
       }
       senderBlockHeight = tempY - currentSectionYPos;
 
       // Calculate Recipient Block
-      tempY = currentSectionYPos;
+      tempY = currentSectionYPos; // Reset tempY for recipient block
       doc.setFont("helvetica", "bold");
       addText("TO:", recipientX, tempY);
       tempY += lineSpacing;
@@ -187,7 +189,16 @@ export default function SigningCompletePageClient() {
       // No address/phone for recipient in current data model
       recipientBlockHeight = tempY - currentSectionYPos;
       
-      yPos = currentSectionYPos + Math.max(senderBlockHeight, recipientBlockHeight) + sectionSpacing;
+      yPos = currentSectionYPos + Math.max(senderBlockHeight, recipientBlockHeight);
+      
+      // Check if new page is needed after sender/recipient block
+      if (yPos > pageHeight - margin - sectionSpacing) {
+        doc.addPage();
+        yPos = margin;
+      } else {
+        yPos += sectionSpacing;
+      }
+
 
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
@@ -212,11 +223,10 @@ export default function SigningCompletePageClient() {
       yPos += lineSpacing;
       doc.setFont("helvetica", "normal");
       yPos = addWrappedText(invoiceData.invoiceDescription, margin, yPos, contentWidth, lineSpacing);
-      // yPos already updated by addWrappedText
-      yPos += sectionSpacing/2; // Reduced spacing after wrapped text
+      yPos += sectionSpacing/2; 
 
-      // Itemized breakdown if available
       if (invoiceData.items && invoiceData.items.length > 0) {
+        if (yPos > pageHeight - margin - sectionSpacing) { doc.addPage(); yPos = margin; }
         doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
         yPos += sectionSpacing;
         doc.setFont("helvetica", "bold");
@@ -234,6 +244,7 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing;
       }
       
+      if (yPos > pageHeight - margin - sectionSpacing) { doc.addPage(); yPos = margin; }
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
 
@@ -245,6 +256,7 @@ export default function SigningCompletePageClient() {
       addText(amountText, doc.internal.pageSize.width - margin - doc.getTextWidth(amountText), yPos);
       yPos += sectionSpacing * 1.5;
       
+      if (yPos > pageHeight - margin - sectionSpacing) { doc.addPage(); yPos = margin; }
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos);
       yPos += sectionSpacing;
       
@@ -274,9 +286,7 @@ export default function SigningCompletePageClient() {
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); 
           if (yPos > pageHeight - margin - (lineSpacing*2)) { doc.addPage(); yPos = margin; }
-          // Use addWrappedText for potentially long text signatures
-          yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.5); // Using 1.5 for cursive font
-          // yPos += lineSpacing * 2; 
+          yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.5); 
         }
       } else {
         if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
@@ -286,7 +296,7 @@ export default function SigningCompletePageClient() {
       
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
       toast({
-        variant: "success", // Use the new success variant
+        variant: "success",
         title: "Download Started",
         description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.`,
       });
@@ -301,7 +311,7 @@ export default function SigningCompletePageClient() {
   };
 
 
-  if (error && !invoiceData) { // Show full error state only if invoiceData also failed to load
+  if (error && !invoiceData) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
         <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
@@ -311,7 +321,6 @@ export default function SigningCompletePageClient() {
     );
   }
   
-  // Show loading or a less critical error if invoiceData is missing but no major error string was set
   if (!invoiceData && !error) {
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
@@ -357,7 +366,7 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData || !signature} // Disable if critical data for PDF is missing
+          disabled={!invoiceData || (!signature && signatureType !== 'text')} 
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
@@ -368,3 +377,4 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
+
