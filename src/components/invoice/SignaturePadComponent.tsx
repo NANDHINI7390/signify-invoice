@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -53,10 +54,12 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         onBegin: () => setIsDrawing(true),
         onEnd: () => {
           setIsDrawing(false);
-          if (signaturePadInstanceRef.current && !signaturePadInstanceRef.current.isEmpty()) {
-            onSignatureChange(signaturePadInstanceRef.current.toDataURL('image/png')); // Specify PNG
-          } else {
-            onSignatureChange(null);
+          if (signaturePadInstanceRef.current) {
+            if (!signaturePadInstanceRef.current.isEmpty()) {
+              onSignatureChange(signaturePadInstanceRef.current.toDataURL('image/png'));
+            } else {
+              onSignatureChange(null);
+            }
           }
         }
       });
@@ -71,7 +74,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         // signaturePadInstanceRef.current?.off(); // Clean up if signature_pad has an 'off' method
       };
     }
-  }, [resizeCanvas]);
+  }, [resizeCanvas, onSignatureChange]); // Added onSignatureChange to dependency array
 
   const clearSignature = () => {
     if (signaturePadInstanceRef.current) {
@@ -87,7 +90,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         ref={canvasRef}
         className="w-full h-full cursor-crosshair touch-none bg-card-white" // Ensure canvas fills the div
         aria-label="Signature Pad"
-        // style={{ touchAction: 'none' }} // Not needed if using touch-none utility class
       ></canvas>
       <Button
         type="button"
