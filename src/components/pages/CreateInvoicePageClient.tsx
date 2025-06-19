@@ -46,7 +46,7 @@ const mockPreviousInvoiceItems: string[] = [
 ];
 
 const EMAILJS_PUBLIC_KEY = 'fg1f_KwO_bzZFYk9G';
-const EMAILJS_SERVICE_ID = 'YOUR_EMAILJS_SERVICE_ID'; // <-- IMPORTANT: Replace with your Service ID
+const EMAILJS_SERVICE_ID = 'service_npytuf4';
 const EMAILJS_TEMPLATE_ID = 'template_7lzmpkr';
 
 
@@ -103,15 +103,16 @@ export default function CreateInvoicePageClient() {
     };
 
     try {
-      if (EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID' || EMAILJS_TEMPLATE_ID === 'YOUR_EMAILJS_TEMPLATE_ID') {
+      // Check if any of the EmailJS IDs are still placeholders, which can happen if the user hasn't provided all of them
+      if (EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID' || EMAILJS_TEMPLATE_ID === 'YOUR_EMAILJS_TEMPLATE_ID' || EMAILJS_PUBLIC_KEY === 'YOUR_EMAILJS_PUBLIC_KEY') {
         toast({
           variant: "destructive",
           title: "EmailJS Not Fully Configured",
-          description: "Please replace placeholder Service ID in CreateInvoicePageClient.tsx with your actual EmailJS Service ID.",
+          description: "Please ensure all EmailJS IDs (Service, Template, Public Key) are correctly set in CreateInvoicePageClient.tsx.",
           duration: 10000,
         });
         // Simulate sending for testing if not configured
-        console.warn("EmailJS Service ID not configured. Simulating email send for navigation.");
+        console.warn("EmailJS not fully configured. Simulating email send for navigation.");
         setTimeout(() => {
           setProgress(100);
           router.push('/email-sent?recipientEmail=' + encodeURIComponent(data.recipientEmail));
@@ -119,7 +120,7 @@ export default function CreateInvoicePageClient() {
         }, 1500);
         return;
       }
-
+      
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_PUBLIC_KEY);
       toast({ title: "Invoice Sent!", description: "The invoice has been successfully emailed for signature." });
       setProgress(100);
