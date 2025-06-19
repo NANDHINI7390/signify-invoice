@@ -22,6 +22,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       const pad = signaturePadInstanceRef.current;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       
+      // Save current signature data before resizing
       const data = pad.toDataURL();
 
       // Set display size
@@ -38,6 +39,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       }
       
       pad.clear(); 
+      // Restore signature if it wasn't just an empty "data:," string
       if (data && data !== "data:,") {
         pad.fromDataURL(data);
       }
@@ -55,8 +57,13 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         onEnd: () => {
           setIsDrawing(false);
           if (signaturePadInstanceRef.current) {
-            if (!signaturePadInstanceRef.current.isEmpty()) {
-              onSignatureChange(signaturePadInstanceRef.current.toDataURL('image/png'));
+            const currentPad = signaturePadInstanceRef.current;
+            // signature_pad's toDataURL returns 'data:,' for an empty canvas
+            const currentDataUrl = currentPad.toDataURL('image/png');
+            const isEmptyCanvas = currentDataUrl === 'data:,';
+
+            if (!isEmptyCanvas) {
+              onSignatureChange(currentDataUrl);
             } else {
               onSignatureChange(null);
             }
@@ -71,7 +78,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
       
       return () => {
         window.removeEventListener('resize', resizeCanvas);
-        signaturePadInstanceRef.current?.off(); // Clean up signature_pad's own listeners
+        signaturePadInstanceRef.current?.off(); 
       };
     }
   }, [resizeCanvas, onSignatureChange]);
