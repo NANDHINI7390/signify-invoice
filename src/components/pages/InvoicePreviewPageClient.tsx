@@ -11,10 +11,10 @@ import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import emailjs from '@emailjs/browser';
 
-// These should ideally be environment variables or configured securely
-const EMAILJS_PUBLIC_KEY = 'fg1f_KwO_bzZFYk9G';
-const EMAILJS_SERVICE_ID = 'service_npytuf4';
-const EMAILJS_TEMPLATE_ID = 'template_7lzmpkr';
+// Values for these will be set in Vercel's environment variables settings
+const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
+const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
 
 interface InvoiceData {
   senderName: string;
@@ -102,16 +102,21 @@ export default function InvoicePreviewPageClient() {
     
     // Log the parameters to help debug the link
     console.log("EmailJS Template Parameters:", templateParams);
+    console.log("Using EmailJS Service ID:", EMAILJS_SERVICE_ID);
+    console.log("Using EmailJS Template ID:", EMAILJS_TEMPLATE_ID);
+    console.log("Using EmailJS Public Key:", EMAILJS_PUBLIC_KEY ? "Set" : "Not Set");
+
 
     try {
-      if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || EMAILJS_SERVICE_ID === 'YOUR_EMAILJS_SERVICE_ID') {
+      if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
          toast({
           variant: "destructive",
           title: "EmailJS Not Fully Configured",
-          description: "Please ensure all EmailJS IDs (Service, Template, Public Key) are correctly set.",
+          description: "EmailJS environment variables (service, template, public key) are not set in Vercel.",
           duration: 7000,
         });
-        console.warn("EmailJS not fully configured. Simulating email send for navigation.");
+        console.warn("EmailJS not fully configured. Check Vercel environment variables: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
+        // Simulating email send for navigation if keys are missing (useful for local dev if .env.local isn't set up)
         setTimeout(() => {
           router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
           setIsSending(false);
@@ -249,3 +254,4 @@ export default function InvoicePreviewPageClient() {
     </div>
   );
 }
+
