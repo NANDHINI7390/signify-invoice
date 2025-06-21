@@ -47,7 +47,7 @@ const mockInvoiceFallback: InvoiceData = {
 };
 
 const BLANK_IMAGE_DATA_URL = 'data:,'; 
-const MIN_DATA_URL_LENGTH = 150; // Min length for a meaningful PNG data URL
+const MIN_DATA_URL_LENGTH = 150;
 const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
@@ -397,4 +397,3 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
-    

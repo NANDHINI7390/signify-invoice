@@ -102,7 +102,6 @@ export default function SigningCompletePageClient() {
           localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); 
         } else {
           console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
-          // Don't set error here yet, let the common checks handle it
         }
       } catch (e) {
         console.error('SigningCompletePageClient useEffect: Error accessing localStorage for signature', e);
@@ -151,7 +150,7 @@ export default function SigningCompletePageClient() {
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]); // Only searchParams
+  }, [searchParams]);
 
 
   useEffect(() => {
@@ -331,23 +330,10 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing/2; 
       }
       
-      if (yPos > pageHeight - margin - sectionSpacing * 2) { doc.addPage(); yPos = margin; } 
-      doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
-
-      doc.setFontSize(12); doc.setFont("helvetica", "bold");
-      if (yPos > pageHeight - margin - lineSpacing) { doc.addPage(); yPos = margin; }
-      addText("TOTAL AMOUNT:", margin, yPos);
-      const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      const amountTextWidth = doc.getTextWidth(amountValueText);
-      const currencyTextWidth = doc.getTextWidth(` (${invoiceData.currency})`);
-      doc.setFontSize(14); addText(amountValueText, doc.internal.pageSize.width - margin - amountTextWidth - currencyTextWidth - 2, yPos);
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); addText(`(${invoiceData.currency})`, doc.internal.pageSize.width - margin - currencyTextWidth, yPos);
-      yPos += sectionSpacing * 1.5; 
-      
-      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 60); 
-      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 60) { 
+      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 75); 
+      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 75) { 
            yPos = signatureAreaYStart; 
-      } else if (yPos > pageHeight - margin - 60) { 
+      } else if (yPos > pageHeight - margin - 75) { 
            doc.addPage();
            yPos = margin; 
       } else { 
@@ -357,58 +343,58 @@ export default function SigningCompletePageClient() {
       doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
       
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      addText(`Signed by: ${invoiceData.recipientName}`, margin, yPos); yPos += smallLineSpacing;
-
+      
+      const signatureBlockX = doc.internal.pageSize.width - margin - 70; // Position signature block on the right
+      
       if (signedAt) {
-        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, margin, yPos); yPos += smallLineSpacing;
+        addText(`Signed by: ${invoiceData.recipientName}`, signatureBlockX, yPos); yPos += smallLineSpacing;
+        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, signatureBlockX, yPos); yPos += smallLineSpacing;
       }
       if (signedUserAgent) {
-        addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, margin, yPos); yPos += smallLineSpacing;
+        addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, signatureBlockX, yPos); yPos += smallLineSpacing;
       }
-      addText("Signed IP Address: (Client-Side Context)", margin, yPos);
-      yPos += sectionSpacing / 2;
-
-      doc.setFont("helvetica", "bold");
-      if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-      addText("Signature:", margin, yPos); yPos += smallLineSpacing;
-
+      addText("Signed IP Address: (Client-Side Context)", signatureBlockX, yPos);
+      
       const signatureImageWidth = 50; 
       const signatureImageHeight = 15; 
+      const signatureImageY = yPos + smallLineSpacing;
 
       if (signature && signature !== BLANK_IMAGE_DATA_URL && signature.length > MIN_DATA_URL_LENGTH) {
         const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
-        if (yPos + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
+        if (signatureImageY + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
 
         if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
-          doc.addImage(signature, 'PNG', margin, yPos, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
-          yPos += signatureImageHeight + smallLineSpacing;
+          doc.addImage(signature, 'PNG', signatureBlockX, signatureImageY, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
         } else if (signatureType === 'text') {
           doc.setFont("cursive", "normal"); doc.setFontSize(12);
-          yPos = addWrappedText(signature, margin, yPos, contentWidth, lineSpacing * 1.1); 
+          addWrappedText(signature, signatureBlockX, signatureImageY, contentWidth, lineSpacing * 1.1); 
         } else { 
             doc.setFont("helvetica", "italic"); 
             let errorText = "[Signature Data Invalid or Unsupported Format]";
-            if(signatureType === 'draw' && !signature.startsWith('data:image/png;base64,')) {
-                errorText = "[Drawn Signature Data Not PNG Format]";
-            } else if (signatureType === 'draw') {
-                errorText = "[Drawn Signature Data Appears Invalid]";
-            }
-            addText(errorText, margin, yPos); 
+            addText(errorText, signatureBlockX, signatureImageY); 
             console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
-            yPos += smallLineSpacing;
         }
       } else {
-        if (yPos > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
+        if (signatureImageY > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
         doc.setFont("helvetica", "italic"); 
         let errorText = "[Signature Not Provided or Empty]";
         if (signatureType === 'draw') errorText = "[Drawn Signature Data Missing or Blank]";
         else if (signatureType === 'text') errorText = "[Typed Signature Data Missing or Blank]";
         
-        addText(errorText, margin, yPos); 
+        addText(errorText, signatureBlockX, signatureImageY); 
         console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
-        yPos += smallLineSpacing;
       }
       
+      doc.line(margin, pageHeight - 20, doc.internal.pageSize.width - margin, pageHeight - 20);
+      
+      const totalAmountX = doc.internal.pageSize.width - margin;
+      doc.setFontSize(12); doc.setFont("helvetica", "bold");
+      const totalAmountLabel = "TOTAL AMOUNT:";
+      addText(totalAmountLabel, margin, yPos - 30);
+      const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      doc.setFontSize(16);
+      addText(amountValueText, margin, yPos - 22);
+
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
       toast({ variant: "success", title: "Download Started", description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.` });
     } catch (pdfError) {
@@ -498,4 +484,3 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
-    
