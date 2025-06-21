@@ -7,7 +7,6 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import AnimatedCheckmark from '@/components/animations/AnimatedCheckmark';
 import { toast } from '@/hooks/use-toast';
-import jsPDF from 'jspdf';
 import { format as formatDateFn } from 'date-fns';
 import emailjs from '@emailjs/browser';
 
@@ -125,8 +124,11 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found." });
     }
     
+    // A blank PNG data URL can be very short. Let's set a minimum meaningful length.
+    const MIN_DATA_URL_LENGTH = 150;
     const BLANK_PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-    if(sigValue && sigValue !== BLANK_PNG_DATA_URL) {
+
+    if(sigValue && sigValue !== BLANK_PNG_DATA_URL && sigValue.length > MIN_DATA_URL_LENGTH) {
       setSignature(sigValue);
     } else {
       setSignature(null);
@@ -140,27 +142,6 @@ export default function SigningCompletePageClient() {
 
   }, [searchParams]);
 
-  // Conditional returns for loading and error states are now at the top
-  if (!invoiceData && !error) { 
-     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
-        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">Loading invoice details...</p>
-      </div>
-    );
-  }
-
-  if (error && !invoiceData) { 
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
-        <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold text-foreground mb-2">Error</h1>
-        <p className="text-muted-foreground mb-6">{error}</p>
-      </div>
-    );
-  }
-
-  // All hooks and functions below this point can safely assume `invoiceData` exists.
   useEffect(() => {
     let i = 0;
     const textToType = `Invoice ${invoiceId || ''} signed successfully!`;
@@ -240,7 +221,7 @@ export default function SigningCompletePageClient() {
   }, [invoiceData, signedAt, sendNotificationToSender, notificationAttempted, notificationStatus]);
 
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!invoiceData) {
       toast({ variant: "destructive", title: "Error Generating PDF", description: "Invoice data is missing." });
       return;
@@ -248,6 +229,7 @@ export default function SigningCompletePageClient() {
     toast({ title: "Preparing PDF...", description: `Generating PDF for invoice ${invoiceData.invoiceNumber}.` });
 
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ compress: true, orientation: 'p', unit: 'mm', format: 'a4' });
       const pageHeight = doc.internal.pageSize.height;
       const pageWidth = doc.internal.pageSize.width;
@@ -330,8 +312,7 @@ export default function SigningCompletePageClient() {
         addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, margin, signatureY + 8);
       }
 
-      const BLANK_PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-      if (signature && signature !== BLANK_PNG_DATA_URL) {
+      if (signature) {
           if (signatureType === 'draw') {
               doc.addImage(signature, 'PNG', signatureX, signatureY, signatureWidth, signatureHeight, undefined, 'MEDIUM');
           } else if (signatureType === 'text') {
@@ -365,6 +346,26 @@ export default function SigningCompletePageClient() {
         toast({ variant: "destructive", title: "PDF Generation Failed", description: "Could not generate the PDF." });
     }
   };
+
+  // Conditional returns for loading and error states
+  if (!invoiceData && !error) { 
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
+        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Loading invoice details...</p>
+      </div>
+    );
+  }
+
+  if (error && !invoiceData) { 
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center p-4">
+        <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
+        <h1 className="text-2xl font-bold text-foreground mb-2">Error</h1>
+        <p className="text-muted-foreground mb-6">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -428,5 +429,3 @@ export default function SigningCompletePageClient() {
     </div>
   );
 }
-
-    
