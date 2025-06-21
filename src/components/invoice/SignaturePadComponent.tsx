@@ -10,8 +10,6 @@ interface SignaturePadComponentProps {
   onSignatureChange: (dataUrl: string | null) => void;
 }
 
-const MIN_MEANINGFUL_DATA_URL_LENGTH = 150; // A reasonable threshold for a non-trivial PNG
-
 export default function SignaturePadComponent({ onSignatureChange }: SignaturePadComponentProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const signaturePadInstanceRef = useRef<SignaturePad | null>(null);
@@ -22,25 +20,35 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
   const updateSignatureState = useCallback(() => {
     if (signaturePadInstanceRef.current && canvasRef.current) {
       const pad = signaturePadInstanceRef.current;
-      let dataUrlToSend: string | null = null;
-
-      if (!pad.isEmpty()) {
-        const currentDataUrl = pad.toDataURL('image/png'); // As per prompt, generate a transparent PNG
-
-        // Validate the generated data URL to ensure it's not effectively blank
-        if (currentDataUrl && currentDataUrl !== 'data:,' && currentDataUrl.length > MIN_MEANINGFUL_DATA_URL_LENGTH) {
-          dataUrlToSend = currentDataUrl;
-          console.log('SignaturePadComponent: Pad has meaningful content. Sending PNG Data URL (prefix & length):', dataUrlToSend.substring(0, 50) + '...', dataUrlToSend.length);
-          if (placeholderRef.current) placeholderRef.current.style.display = 'none';
-        } else {
-          console.log(`SignaturePadComponent: Pad.isEmpty() is false, but toDataURL gave trivial data (url: ${currentDataUrl?.substring(0,30)}, len: ${currentDataUrl?.length}). Treating as empty. Sending null.`);
-          if (placeholderRef.current) placeholderRef.current.style.display = 'block';
-        }
-      } else {
-        console.log('SignaturePadComponent: Pad is truly empty (isEmpty() is true). Sending null.');
+      
+      if (pad.isEmpty()) {
+        console.log('SignaturePadComponent: Pad is empty. Sending null.');
+        onSignatureChange(null);
         if (placeholderRef.current) placeholderRef.current.style.display = 'block';
+        return;
       }
-      onSignatureChange(dataUrlToSend);
+
+      // Per user prompt: convert canvas to a proper image to ensure it can be displayed in the PDF.
+      // Create a new canvas with a white background to avoid transparency issues in the PDF.
+      const cleanCanvas = document.createElement('canvas');
+      cleanCanvas.width = canvasRef.current.width;
+      cleanCanvas.height = canvasRef.current.height;
+      const cleanCtx = cleanCanvas.getContext('2d');
+      if (cleanCtx) {
+        // Fill with white background
+        cleanCtx.fillStyle = '#FFFFFF';
+        cleanCtx.fillRect(0, 0, cleanCanvas.width, cleanCanvas.height);
+        // Draw original signature on top
+        cleanCtx.drawImage(canvasRef.current, 0, 0);
+      }
+      
+      // Get the image data from the cleaned canvas
+      const signatureImageData = cleanCanvas.toDataURL('image/png');
+      
+      console.log('SignaturePadComponent: Captured signature data. Length:', signatureImageData.length, 'Prefix:', signatureImageData.substring(0, 50) + '...');
+      onSignatureChange(signatureImageData);
+      if (placeholderRef.current) placeholderRef.current.style.display = 'none';
+
     } else {
       console.log('SignaturePadComponent: Pad instance or canvas not found, sending null.');
       onSignatureChange(null);
@@ -79,7 +87,7 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (canvasRef.current && wrapperRef.current) {
       const canvas = canvasRef.current;
       const pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgba(255, 255, 255, 0)', // Use a transparent background for PNG
+        backgroundColor: 'rgba(255, 255, 255, 0)', // Transparent background for drawing
         penColor: 'rgb(31, 41, 55)', 
         minWidth: 0.75, 
         maxWidth: 2.5, 
@@ -91,7 +99,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
         },
         onEnd: () => {
           setIsDrawing(false);
-          console.log('SignaturePadComponent: onEnd triggered.');
           updateSignatureState(); 
         }
       });
@@ -116,7 +123,6 @@ export default function SignaturePadComponent({ onSignatureChange }: SignaturePa
     if (signaturePadInstanceRef.current) {
       signaturePadInstanceRef.current.clear();
       setIsDrawing(false); 
-      console.log('SignaturePadComponent: clearSignature called.');
       updateSignatureState(); 
     }
   };

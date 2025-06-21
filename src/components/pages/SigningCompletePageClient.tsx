@@ -30,9 +30,9 @@ const currencySymbols: { [key: string]: string } = {
   INR: '₹', USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$',
 };
 
-const BLANK_IMAGE_DATA_URL = 'data:,';
-const MIN_DATA_URL_LENGTH = 150; 
 const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
+// As per user prompt, a specific blank 1x1 PNG data URL for validation
+const BLANK_PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
 const SenderNotificationStatus = ({ status, onRetry }: { status: 'pending' | 'success' | 'error' | 'idle' | 'retrying', onRetry: () => void }) => {
   if (status === 'idle') return null;
@@ -98,27 +98,25 @@ export default function SigningCompletePageClient() {
       try {
         sigValue = localStorage.getItem(TEMP_DRAWN_SIGNATURE_KEY);
         if (sigValue) {
-          console.log('SigningCompletePageClient useEffect: Retrieved drawn signature (PNG) from localStorage (length:', sigValue.length, ')');
+          console.log('SigningCompletePageClient: Retrieved drawn signature from localStorage. Length:', sigValue.length);
           localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); 
         } else {
-          console.warn('SigningCompletePageClient useEffect: Drawn signature expected but not found in localStorage.');
+          console.warn('SigningCompletePageClient: Drawn signature expected but not found in localStorage.');
         }
       } catch (e) {
-        console.error('SigningCompletePageClient useEffect: Error accessing localStorage for signature', e);
+        console.error('SigningCompletePageClient: Error accessing localStorage for signature', e);
         setError("Failed to retrieve drawn signature data.");
       }
     } else if (sigTypeParam === 'text') {
       const tempSigValueFromParam = searchParams.get('signature');
       if (tempSigValueFromParam) {
         sigValue = decodeURIComponent(tempSigValueFromParam);
-        console.log('SigningCompletePageClient useEffect: Retrieved typed signature from URL params:', sigValue);
+        console.log('SigningCompletePageClient: Retrieved typed signature from URL params:', sigValue);
       } else {
-        console.warn('SigningCompletePageClient useEffect: Typed signature expected but not found in URL params.');
+        console.warn('SigningCompletePageClient: Typed signature expected but not found in URL params.');
       }
     }
     
-    console.log('SigningCompletePageClient useEffect: sigTypeParam:', sigTypeParam, 'sigValue (prefix & length):', sigValue ? sigValue.substring(0,50) + '...' : null, sigValue ? sigValue.length : 0);
-
     if (dataString) {
       try {
         const parsedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
@@ -134,22 +132,11 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
-    if (sigValue && sigValue !== BLANK_IMAGE_DATA_URL && sigValue.length > MIN_DATA_URL_LENGTH) {
-        setSignature(sigValue); 
-    } else {
-        console.log('SigningCompletePageClient useEffect: sigValue is blank, too short, or null. Setting signature to null. Actual sigValue prefix:', sigValue ? sigValue.substring(0,30) : "null");
-        setSignature(null); 
-        if (sigTypeParam && !sigValue && !error) { 
-          setError(`Signature data not found after signing. It might have been cleared or not saved correctly for ${sigTypeParam} signature.`);
-        } else if (sigValue && !error && (sigValue === BLANK_IMAGE_DATA_URL || sigValue.length <= MIN_DATA_URL_LENGTH)) { 
-           setError(`Invalid or empty ${sigTypeParam} signature data received.`);
-        }
-    }
+    setSignature(sigValue);
     
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
 
@@ -177,14 +164,12 @@ export default function SigningCompletePageClient() {
   
   const sendNotificationToSender = useCallback(async () => {
     if (!invoiceData || !signedAt || isNotifyingSender || notificationStatus === 'success' || notificationStatus === 'pending' || notificationStatus === 'retrying') {
-      console.log("sendNotificationToSender: Aborting - missing data, already notifying, already succeeded, or an attempt is in progress.", { hasInvoiceData: !!invoiceData, hasSignedAt: !!signedAt, isNotifyingSender, notificationStatus });
       if (!notificationAttempted && notificationStatus !== 'pending' && notificationStatus !== 'retrying' && notificationStatus !== 'success') {
         setNotificationStatus('idle'); 
       }
       return;
     }
 
-    console.log("sendNotificationToSender: Attempting to notify sender.");
     setIsNotifyingSender(true);
     setNotificationStatus(notificationAttempted ? 'retrying' : 'pending'); 
     setNotificationAttempted(true); 
@@ -229,7 +214,6 @@ export default function SigningCompletePageClient() {
 
   useEffect(() => {
     if (invoiceData && signedAt && !notificationAttempted && notificationStatus === 'idle') {
-       console.log("useEffect: Triggering initial sender notification because invoiceData, signedAt are present, no attempt made, and status is idle.");
       sendNotificationToSender();
     }
   }, [invoiceData, signedAt, sendNotificationToSender, notificationAttempted, notificationStatus]);
@@ -242,13 +226,13 @@ export default function SigningCompletePageClient() {
     }
     toast({ title: "Preparing PDF...", description: `Generating PDF for invoice ${invoiceData.invoiceNumber}.` });
 
-    console.log('SigningCompletePageClient handleDownloadPdf: Using signature (prefix & length):', signature ? signature.substring(0,50) + '...' : null, signature ? signature.length : 0);
+    console.log('SigningCompletePageClient handleDownloadPdf: Using signature data (prefix & length):', signature ? signature.substring(0,50) + '...' : null, signature ? signature.length : 0);
     console.log('SigningCompletePageClient handleDownloadPdf: Using signatureType:', signatureType);
-
 
     try {
       const doc = new jsPDF({ compress: true, orientation: 'p', unit: 'mm', format: 'a4', precision: 16 });
       const pageHeight = doc.internal.pageSize.height;
+      const pageWidth = doc.internal.pageSize.width;
       let yPos = 20;
       const lineSpacing = 6; 
       const smallLineSpacing = 4.5;
@@ -330,70 +314,56 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing/2; 
       }
       
-      const signatureAreaYStart = Math.max(yPos + sectionSpacing, pageHeight - margin - 75); 
-      if (yPos > signatureAreaYStart - sectionSpacing && yPos < pageHeight - margin - 75) { 
-           yPos = signatureAreaYStart; 
-      } else if (yPos > pageHeight - margin - 75) { 
-           doc.addPage();
-           yPos = margin; 
-      } else { 
-          yPos = signatureAreaYStart;
+      let signatureYPos = pageHeight - 70;
+      if (yPos > signatureYPos - sectionSpacing) {
+          doc.addPage();
+          yPos = 20;
+          signatureYPos = pageHeight - 70;
       }
       
-      doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
+      doc.line(margin, signatureYPos - sectionSpacing, doc.internal.pageSize.width - margin, signatureYPos - sectionSpacing);
       
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      
-      const signatureBlockX = doc.internal.pageSize.width - margin - 70; // Position signature block on the right
-      
-      if (signedAt) {
-        addText(`Signed by: ${invoiceData.recipientName}`, signatureBlockX, yPos); yPos += smallLineSpacing;
-        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, signatureBlockX, yPos); yPos += smallLineSpacing;
-      }
-      if (signedUserAgent) {
-        addText(`Signed Using: ${getDeviceType(signedUserAgent)}`, signatureBlockX, yPos); yPos += smallLineSpacing;
-      }
-      addText("Signed IP Address: (Client-Side Context)", signatureBlockX, yPos);
-      
-      const signatureImageWidth = 50; 
-      const signatureImageHeight = 15; 
-      const signatureImageY = yPos + smallLineSpacing;
-
-      if (signature && signature !== BLANK_IMAGE_DATA_URL && signature.length > MIN_DATA_URL_LENGTH) {
-        const signatureAreaHeight = signatureType === 'draw' ? signatureImageHeight : (doc.splitTextToSize(signature, contentWidth).length * lineSpacing * 1.2);
-        if (signatureImageY + signatureAreaHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
-
-        if (signatureType === 'draw' && signature.startsWith('data:image/png;base64,')) {
-          doc.addImage(signature, 'PNG', signatureBlockX, signatureImageY, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
-        } else if (signatureType === 'text') {
-          doc.setFont("cursive", "normal"); doc.setFontSize(12);
-          addWrappedText(signature, signatureBlockX, signatureImageY, contentWidth, lineSpacing * 1.1); 
-        } else { 
-            doc.setFont("helvetica", "italic"); 
-            let errorText = "[Signature Data Invalid or Unsupported Format]";
-            addText(errorText, signatureBlockX, signatureImageY); 
-            console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
-        }
-      } else {
-        if (signatureImageY > pageHeight - margin - smallLineSpacing) { doc.addPage(); yPos = margin; }
-        doc.setFont("helvetica", "italic"); 
-        let errorText = "[Signature Not Provided or Empty]";
-        if (signatureType === 'draw') errorText = "[Drawn Signature Data Missing or Blank]";
-        else if (signatureType === 'text') errorText = "[Typed Signature Data Missing or Blank]";
-        
-        addText(errorText, signatureBlockX, signatureImageY); 
-        console.error("PDF Signature Error:", errorText, "Type:", signatureType, "Data (prefix):", signature ? signature.substring(0,30) : "null");
-      }
-      
-      doc.line(margin, pageHeight - 20, doc.internal.pageSize.width - margin, pageHeight - 20);
       
       const totalAmountX = doc.internal.pageSize.width - margin;
       doc.setFontSize(12); doc.setFont("helvetica", "bold");
       const totalAmountLabel = "TOTAL AMOUNT:";
-      addText(totalAmountLabel, margin, yPos - 30);
+      addText(totalAmountLabel, margin, signatureYPos - 20);
       const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       doc.setFontSize(16);
-      addText(amountValueText, margin, yPos - 22);
+      addText(amountValueText, margin, signatureYPos - 12);
+      
+      // Signature Section
+      const signatureBlockX = margin; 
+      const signatureBlockY = signatureYPos;
+      
+      if (signedAt) {
+        addText(`Signed by: ${invoiceData.recipientName}`, signatureBlockX, signatureBlockY);
+        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, signatureBlockX, signatureBlockY + smallLineSpacing);
+      }
+      
+      const signatureImageX = pageWidth - 80 - margin;
+      const signatureImageY = signatureYPos - 10;
+      const signatureImageWidth = 80;
+      const signatureImageHeight = 40;
+
+      // Logic from user prompt
+      if (signature && signature !== BLANK_PNG_DATA_URL) {
+        console.log("PDF Generation: Adding signature image to PDF.");
+        if (signatureType === 'draw') {
+          doc.addImage(signature, 'PNG', signatureImageX, signatureImageY, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
+        } else if (signatureType === 'text') {
+          doc.setFont("cursive", "normal");
+          doc.setFontSize(16);
+          doc.text(signature, signatureImageX, signatureImageY + (signatureImageHeight / 2));
+        }
+      } else {
+        console.log("PDF Generation: Signature data is missing or blank. Adding fallback text.");
+        doc.setFont("helvetica", "italic"); 
+        addText("[Signature Not Provided or Empty]", signatureImageX, signatureImageY + 20); 
+      }
+      
+      doc.line(margin, pageHeight - 20, doc.internal.pageSize.width - margin, pageHeight - 20);
 
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
       toast({ variant: "success", title: "Download Started", description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.` });
@@ -469,15 +439,15 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData || (!signature && signatureType === 'draw') || (!signature && signatureType === 'text')}
+          disabled={!invoiceData || !signature}
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
         >
           <Download className="mr-2 w-5 h-5" /> Download Signed PDF
         </Button>
-        {(!signature && signatureType === 'draw' && !error) && (
-            <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve drawn signature for PDF. Please ensure you drew a signature.</p>
+        {(!signature) && (
+            <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve signature for PDF.</p>
         )}
          {error && <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>{error}</p>}
       </div>

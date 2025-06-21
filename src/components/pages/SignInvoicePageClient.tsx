@@ -46,8 +46,6 @@ const mockInvoiceFallback: InvoiceData = {
   ]
 };
 
-const BLANK_IMAGE_DATA_URL = 'data:,'; 
-const MIN_DATA_URL_LENGTH = 150;
 const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
@@ -96,7 +94,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   }, [invoiceId, searchParams]);
 
   const handleSignatureDataChange = useCallback((dataUrl: string | null) => {
-    console.log('SignInvoicePageClient: Received signature data from SignaturePadComponent. URL (prefix & length):', dataUrl ? dataUrl.substring(0,50) + '...' : null, dataUrl ? dataUrl.length : 0);
     setSignatureDataUrl(dataUrl);
   }, []);
   
@@ -107,14 +104,10 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
   }, []);
 
   useEffect(() => {
-    const isDrawSignatureMeaningful = signatureDataUrl && signatureDataUrl !== BLANK_IMAGE_DATA_URL && signatureDataUrl.length > MIN_DATA_URL_LENGTH;
+    const isDrawSignatureMeaningful = !!signatureDataUrl;
     const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
     const hasSignature = isDrawSignatureMeaningful || isTextSignatureProvided;
     
-    console.log('SignInvoicePageClient useEffect: signatureDataUrl (prefix & length):', signatureDataUrl ? signatureDataUrl.substring(0,30) : 'null', 'length:', signatureDataUrl?.length);
-    console.log('SignInvoicePageClient useEffect: textSignature:', textSignature, 'useTextSignature:', useTextSignature);
-    console.log('SignInvoicePageClient useEffect: isDrawSignatureMeaningful:', isDrawSignatureMeaningful, 'isTextSignatureProvided:', isTextSignatureProvided, 'agreementChecked:', agreementChecked);
-
     if (hasSignature && agreementChecked) {
       setSignButtonText('✅ Sign Invoice Now');
       setSignButtonDisabled(false);
@@ -144,15 +137,9 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
 
 
   const handleSign = () => {
-    const isDrawSignatureActuallyMeaningful = signatureDataUrl && signatureDataUrl !== BLANK_IMAGE_DATA_URL && signatureDataUrl.length > MIN_DATA_URL_LENGTH;
+    const isDrawSignatureActuallyMeaningful = !!signatureDataUrl;
     const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
     const hasValidSignature = isDrawSignatureActuallyMeaningful || isTextSignatureProvided;
-
-    console.log('SignInvoicePageClient: handleSign called.');
-    console.log('  useTextSignature:', useTextSignature);
-    console.log('  isDrawSignatureActuallyMeaningful:', isDrawSignatureActuallyMeaningful, '(URL prefix:', signatureDataUrl ? signatureDataUrl.substring(0,30) : null, ', length:', signatureDataUrl?.length, ')');
-    console.log('  isTextSignatureProvided:', isTextSignatureProvided, '(Text:', textSignature, ')');
-    console.log('  agreementChecked:', agreementChecked);
 
     if (!agreementChecked) {
       toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
@@ -173,7 +160,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     if (!useTextSignature && isDrawSignatureActuallyMeaningful && signatureDataUrl) {
       try {
         localStorage.setItem(TEMP_DRAWN_SIGNATURE_KEY, signatureDataUrl);
-        console.log('SignInvoicePageClient: Stored drawn signature (PNG) in localStorage (key:', TEMP_DRAWN_SIGNATURE_KEY, 'length:', signatureDataUrl.length, ')');
+        console.log('SignInvoicePageClient: Stored drawn signature in localStorage. Length:', signatureDataUrl.length);
       } catch (e) {
         console.error('SignInvoicePageClient: Failed to store signature in localStorage', e);
         toast({ variant: "destructive", title: "Storage Error", description: "Could not temporarily save signature." });
@@ -192,8 +179,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         return;
     }
     
-    console.log('SignInvoicePageClient: Preparing to navigate.');
-
     setTimeout(() => {
       setIsLoading(false);
       
@@ -211,7 +196,6 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
       url += `&signedAt=${encodeURIComponent(signedAt)}`;
       url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
       
-      console.log('SignInvoicePageClient: Navigating to URL:', url.substring(0, 300) + (url.length > 300 ? '...' : ''));
       router.push(url);
     }, 1500);
   };
