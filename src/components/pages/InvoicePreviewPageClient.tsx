@@ -97,10 +97,10 @@ export default function InvoicePreviewPageClient() {
     
     if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
        toast({
-        variant: "destructive",
-        title: "EmailJS Not Fully Configured",
-        description: "EmailJS environment variables are not set. Please configure them in Vercel or your .env.local file. Check NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
-        duration: 7000,
+        variant: "default",
+        title: "Developer Info: Email Not Configured",
+        description: "Simulating email send. To send real emails, set up your EmailJS environment variables.",
+        duration: 8000,
       });
       console.warn("EmailJS not fully configured. Check Vercel environment variables or .env.local: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
       setTimeout(() => {

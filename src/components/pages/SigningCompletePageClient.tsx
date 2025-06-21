@@ -102,6 +102,7 @@ export default function SigningCompletePageClient() {
           localStorage.removeItem(TEMP_DRAWN_SIGNATURE_KEY); 
         } else {
           console.warn('SigningCompletePageClient: Drawn signature expected but not found in localStorage.');
+          setError("Could not retrieve drawn signature data.");
         }
       } catch (e) {
         console.error('SigningCompletePageClient: Error accessing localStorage for signature', e);
@@ -132,7 +133,14 @@ export default function SigningCompletePageClient() {
        toast({ variant: "destructive", title: "Data Error", description: "Invoice details not found for PDF generation." });
     }
 
-    setSignature(sigValue);
+    if(sigValue && sigValue !== BLANK_PNG_DATA_URL) {
+      setSignature(sigValue);
+    } else {
+      setSignature(null);
+      if (sigTypeParam === 'draw') {
+        setError("Drawn signature is blank.");
+      }
+    }
     
     if (signedAtParam) setSignedAt(decodeURIComponent(signedAtParam));
     if (signedUserAgentParam) setSignedUserAgent(decodeURIComponent(signedUserAgentParam));
@@ -180,12 +188,12 @@ export default function SigningCompletePageClient() {
 
     if (!SENDER_NOTIFY_SERVICE_ID || !SENDER_NOTIFY_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
       toast({
-        variant: "destructive",
-        title: "Sender Notification Not Configured",
-        description: "EmailJS variables for sender notification are not set. Check NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY.",
+        variant: "default",
+        title: "Developer Info: Sender Notification Not Configured",
+        description: "To notify the sender, set up the sender-specific EmailJS environment variables.",
         duration: 8000,
       });
-      console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local: NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY");
+      console.warn("EmailJS for sender notification not fully configured. Check Vercel env vars or .env.local: NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_SERVICE_ID, NEXT_PUBLIC_EMAILJS_SENDER_NOTIFICATION_TEMPLATE_ID");
       setIsNotifyingSender(false);
       setNotificationStatus('error');
       return;
@@ -314,56 +322,53 @@ export default function SigningCompletePageClient() {
         yPos += sectionSpacing/2; 
       }
       
-      let signatureYPos = pageHeight - 70;
-      if (yPos > signatureYPos - sectionSpacing) {
-          doc.addPage();
-          yPos = 20;
-          signatureYPos = pageHeight - 70;
+      let signatureAreaY = pageHeight - 70;
+      if (yPos > signatureAreaY - 20) {
+        doc.addPage();
+        signatureAreaY = pageHeight - 70;
+      }
+      yPos = signatureAreaY;
+
+
+      doc.line(margin, yPos, doc.internal.pageSize.width - margin, yPos); yPos += sectionSpacing;
+      
+      const signatureImageX = pageWidth - 65;
+      const signatureImageY = yPos;
+      const signatureImageWidth = 50;
+      const signatureImageHeight = 15;
+
+      doc.setFontSize(8);
+      if (signedAt) {
+        addText(`Signed by: ${invoiceData.recipientName}`, margin, yPos + 4);
+        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, margin, yPos + 8);
+      }
+
+      if (signature) {
+          if (signatureType === 'draw') {
+              doc.addImage(signature, 'PNG', signatureImageX, signatureImageY, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM');
+          } else if (signatureType === 'text') {
+              doc.setFont("cursive", "normal");
+              doc.setFontSize(16);
+              doc.text(signature, signatureImageX, signatureImageY + signatureImageHeight / 2 + 4);
+          }
+      } else {
+        doc.setFont("helvetica", "italic"); 
+        doc.setTextColor(150, 150, 150);
+        addText("[Signature data not available]", signatureImageX, signatureImageY + signatureImageHeight / 2); 
       }
       
-      doc.line(margin, signatureYPos - sectionSpacing, doc.internal.pageSize.width - margin, signatureYPos - sectionSpacing);
-      
-      doc.setFontSize(10); doc.setFont("helvetica", "normal");
-      
-      const totalAmountX = doc.internal.pageSize.width - margin;
-      doc.setFontSize(12); doc.setFont("helvetica", "bold");
+      doc.line(signatureImageX, signatureImageY + signatureImageHeight + 1, signatureImageX + signatureImageWidth, signatureImageY + signatureImageHeight + 1);
+      doc.setFontSize(6);
+      doc.setTextColor(150, 150, 150);
+      addText("Digitally Signed via Signify Invoice", signatureImageX, signatureImageY + signatureImageHeight + 4);
+
+
+      doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0);
       const totalAmountLabel = "TOTAL AMOUNT:";
-      addText(totalAmountLabel, margin, signatureYPos - 20);
+      addText(totalAmountLabel, margin, yPos + signatureImageHeight + 15);
       const amountValueText = `${currencySymbols[invoiceData.currency] || invoiceData.currency}${invoiceData.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       doc.setFontSize(16);
-      addText(amountValueText, margin, signatureYPos - 12);
-      
-      // Signature Section
-      const signatureBlockX = margin; 
-      const signatureBlockY = signatureYPos;
-      
-      if (signedAt) {
-        addText(`Signed by: ${invoiceData.recipientName}`, signatureBlockX, signatureBlockY);
-        addText(`Date Signed: ${formatDateFn(new Date(signedAt), 'PPP p')}`, signatureBlockX, signatureBlockY + smallLineSpacing);
-      }
-      
-      const signatureImageX = pageWidth - 80 - margin;
-      const signatureImageY = signatureYPos - 10;
-      const signatureImageWidth = 80;
-      const signatureImageHeight = 40;
-
-      // Logic from user prompt
-      if (signature && signature !== BLANK_PNG_DATA_URL) {
-        console.log("PDF Generation: Adding signature image to PDF.");
-        if (signatureType === 'draw') {
-          doc.addImage(signature, 'PNG', signatureImageX, signatureImageY, signatureImageWidth, signatureImageHeight, undefined, 'MEDIUM'); 
-        } else if (signatureType === 'text') {
-          doc.setFont("cursive", "normal");
-          doc.setFontSize(16);
-          doc.text(signature, signatureImageX, signatureImageY + (signatureImageHeight / 2));
-        }
-      } else {
-        console.log("PDF Generation: Signature data is missing or blank. Adding fallback text.");
-        doc.setFont("helvetica", "italic"); 
-        addText("[Signature Not Provided or Empty]", signatureImageX, signatureImageY + 20); 
-      }
-      
-      doc.line(margin, pageHeight - 20, doc.internal.pageSize.width - margin, pageHeight - 20);
+      addText(amountValueText, margin, yPos + signatureImageHeight + 22);
 
       doc.save(`signed_invoice_${invoiceData.invoiceNumber || 'document'}.pdf`);
       toast({ variant: "success", title: "Download Started", description: `PDF for invoice ${invoiceData.invoiceNumber} should be downloading.` });
@@ -439,14 +444,14 @@ export default function SigningCompletePageClient() {
         <Button
           size="lg"
           onClick={handleDownloadPdf}
-          disabled={!invoiceData || !signature}
+          disabled={!invoiceData}
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-8 rounded-lg text-lg shadow-button-hover-blue transform hover:-translate-y-0.5 transition-all duration-300 animate-fadeIn active:scale-95 min-h-[48px]"
           style={{animationDelay: '3.2s'}}
           aria-label="Download Signed PDF"
         >
           <Download className="mr-2 w-5 h-5" /> Download Signed PDF
         </Button>
-        {(!signature) && (
+        {(!signature && signatureType === 'draw') && (
             <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>Could not retrieve signature for PDF.</p>
         )}
          {error && <p className="text-xs text-destructive mt-2 animate-fadeIn" style={{animationDelay: '3.4s'}}>{error}</p>}
