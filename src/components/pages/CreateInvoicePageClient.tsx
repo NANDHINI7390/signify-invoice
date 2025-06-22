@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,6 +19,8 @@ import { Calendar as CalendarIcon, User, Mail, MapPin, Phone, Hash, DollarSign, 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { suggestInvoiceItems, type SuggestInvoiceItemsInput } from '@/ai/flows/suggest-invoice-items';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import SignIn from '@/components/auth/SignIn';
 
 const invoiceSchema = z.object({
   senderName: z.string().min(1, 'Your name is required.'),
@@ -57,6 +58,7 @@ const currencyOptions = [
 ];
 
 export default function CreateInvoicePageClient() {
+  const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [progress, setProgress] = useState(0); // Start at 0, update based on fields
@@ -67,7 +69,7 @@ export default function CreateInvoicePageClient() {
   const [selectedCurrencySymbol, setSelectedCurrencySymbol] = useState('₹');
 
 
-  const { register, handleSubmit, control, formState: { errors, touchedFields, dirtyFields }, watch, setValue, reset } = useForm<InvoiceFormData>({
+  const { register, handleSubmit, control, formState: { errors, touchedFields, dirtyFields }, watch, setValue, reset, getValues } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       invoiceDate: new Date(),
@@ -79,6 +81,19 @@ export default function CreateInvoicePageClient() {
 
   const currentDescription = watch('invoiceDescription');
   const watchedFields = watch(); // Watch all fields for progress calculation
+
+  // Effect to pre-fill user data if they are logged in and fields are empty
+  useEffect(() => {
+    if (user) {
+      if (!getValues('senderName')) {
+        setValue('senderName', user.displayName || '', { shouldDirty: true });
+      }
+      if (!getValues('senderEmail')) {
+        setValue('senderEmail', user.email || '', { shouldDirty: true });
+      }
+    }
+  }, [user, setValue, getValues]);
+
 
   // Effect for loading edit data
   useEffect(() => {
@@ -186,6 +201,10 @@ export default function CreateInvoicePageClient() {
     if (touchedFields[fieldName] && !errors[fieldName]) return 'border-success-green-DEFAULT focus:border-success-green-DEFAULT ring-success-green-DEFAULT';
     return 'border-input focus:border-primary-blue-DEFAULT ring-primary-blue-DEFAULT';
   };
+
+  if (!user) {
+    return <SignIn />;
+  }
 
   return (
     <div className="max-w-4xl mx-auto py-8 animate-fadeIn">
@@ -440,6 +459,3 @@ export default function CreateInvoicePageClient() {
     </div>
   );
 }
-
-
-    
