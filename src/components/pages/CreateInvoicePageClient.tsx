@@ -23,7 +23,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import SignIn from '@/components/auth/SignIn';
 import { db } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 
 const invoiceSchema = z.object({
   senderName: z.string().min(1, 'Your name is required.'),
@@ -44,13 +44,6 @@ const invoiceSchema = z.object({
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
 
-const mockPreviousInvoiceItems: string[] = [
-  "Web Design Services - Full Project",
-  "Consulting - Q1 Strategy",
-  "Monthly Retainer - Social Media Management",
-  "Graphic Design - Brand Identity Package",
-];
-
 const currencyOptions = [
   { value: 'INR', label: '₹ INR (Indian Rupee)' },
   { value: 'USD', label: '$ USD (US Dollar)' },
@@ -69,6 +62,7 @@ export default function CreateInvoicePageClient() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedCurrencySymbol, setSelectedCurrencySymbol] = useState('₹');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previousInvoiceItems, setPreviousInvoiceItems] = useState<string[]>([]);
 
   const { register, handleSubmit, control, formState: { errors, touchedFields, dirtyFields }, watch, setValue, getValues } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
@@ -89,6 +83,35 @@ export default function CreateInvoicePageClient() {
       if (!getValues('senderEmail')) setValue('senderEmail', user.email || '', { shouldDirty: true });
     }
   }, [user, setValue, getValues]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchPreviousItems = async () => {
+        try {
+            const q = query(
+                collection(db, 'invoices'),
+                where('senderUid', '==', user.uid),
+                orderBy('createdAt', 'desc'),
+                limit(10) // Fetch last 10 for variety
+            );
+            const querySnapshot = await getDocs(q);
+            const items = new Set<string>(); // Use a Set to avoid duplicates
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.invoiceDescription) {
+                    items.add(data.invoiceDescription);
+                }
+            });
+            setPreviousInvoiceItems(Array.from(items));
+        } catch (error) {
+            console.error("Error fetching previous invoice items:", error);
+            // Don't bother user with a toast for this, it's not critical
+        }
+    };
+
+    fetchPreviousItems();
+  }, [user]);
 
   useEffect(() => {
     const totalFields = Object.keys(invoiceSchema.shape).length;
@@ -148,7 +171,7 @@ export default function CreateInvoicePageClient() {
   };
 
   const handleSuggestDescription = async () => {
-    if (!currentDescription && mockPreviousInvoiceItems.length === 0) {
+    if (!currentDescription && previousInvoiceItems.length === 0) {
       toast({ variant: "destructive", title: "Cannot suggest", description: "Please type something or have previous items for suggestions." });
       return;
     }
@@ -156,7 +179,7 @@ export default function CreateInvoicePageClient() {
     setSuggestions([]);
     try {
       const input: SuggestInvoiceItemsInput = {
-        previousEntries: mockPreviousInvoiceItems,
+        previousEntries: previousInvoiceItems,
         currentInput: currentDescription || "",
       };
       const result = await suggestInvoiceItems(input);
@@ -438,5 +461,3 @@ export default function CreateInvoicePageClient() {
     </div>
   );
 }
-
-    
