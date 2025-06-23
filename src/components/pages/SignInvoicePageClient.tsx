@@ -9,12 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Edit, Check, Loader2, AlertTriangle, FileText, UserCircle, Building } from 'lucide-react';
 import SignaturePadComponent from '@/components/invoice/SignaturePadComponent';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface InvoiceData {
-  id?: string; 
   invoiceNumber: string;
   senderName: string;
   senderEmail: string;
@@ -24,7 +25,8 @@ interface InvoiceData {
   invoiceDescription: string;
   amount: number;
   currency: string;
-  invoiceDate: string; 
+  invoiceDate: string;
+  status: 'pending' | 'signed';
   items?: { description: string; quantity: number; unitPrice: number; total: number }[];
 }
 
@@ -32,71 +34,58 @@ const currencySymbols: { [key: string]: string } = {
   INR: '₹', USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'C$',
 };
 
-const mockInvoiceFallback: InvoiceData = {
-  id: "INV-FALLBACK-001", invoiceNumber: "INV-FALLBACK-001",
-  senderName: "Signify Demo Corp.", senderEmail: "billing@signifydemo.com",
-  senderAddress: "123 Demo Street, Suite 400, Tech City, TC 54321",
-  recipientName: "John Signee", recipientEmail: "john.signee@example.com",
-  invoiceDescription: "Sample consulting services rendered for Q4, including project management and technical advisory.",
-  amount: 3500.00, currency: 'USD', invoiceDate: new Date().toISOString(),
-  items: [
-    { description: "Project Management (10 hours)", quantity: 1, unitPrice: 1500, total: 1500 },
-    { description: "Technical Advisory (5 hours)", quantity: 1, unitPrice: 1000, total: 1000 },
-    { description: "Support Services", quantity: 1, unitPrice: 1000, total: 1000 },
-  ]
-};
-
-const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData'; 
+const TEMP_DRAWN_SIGNATURE_KEY = 'tempDrawnSignatureData';
 
 export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
   const [agreementChecked, setAgreementChecked] = useState(false);
-  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null); 
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [useTextSignature, setUseTextSignature] = useState(false);
-  const [textSignature, setTextSignature] = useState(''); 
+  const [textSignature, setTextSignature] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [signButtonText, setSignButtonText] = useState('⏸️ Complete signature and agreement');
   const [signButtonDisabled, setSignButtonDisabled] = useState(true);
-  const [signButtonStyle, setSignButtonStyle] = useState<React.CSSProperties>({ backgroundColor: '#6B7280', cursor: 'not-allowed', opacity: '0.5' });
+  const [signButtonStyle, setSignButtonStyle] = useState<React.CSSProperties>({ cursor: 'not-allowed', opacity: '0.5' });
   const [signatureStatusText, setSignatureStatusText] = useState('Please sign above and agree to terms');
-  const [signatureStatusColor, setSignatureStatusColor] = useState('#6B7280');
+  const [signatureStatusColor, setSignatureStatusColor] = useState('hsl(var(--muted-foreground))');
 
   useEffect(() => {
-    const dataString = searchParams.get('data');
-    if (dataString) {
+    if (!invoiceId) {
+      setError("No invoice ID provided.");
+      return;
+    }
+    const fetchInvoice = async () => {
       try {
-        const parsedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
-        parsedData.amount = parseFloat(String(parsedData.amount));
-        setInvoiceData(parsedData);
-        if (parsedData.recipientName) {
-            setTextSignature(parsedData.recipientName);
+        const docRef = doc(db, 'invoices', invoiceId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as InvoiceData;
+          if (data.status === 'signed') {
+            setError('This invoice has already been signed.');
+            toast({ variant: "destructive", title: "Already Signed", description: "This invoice cannot be signed again." });
+          }
+          setInvoiceData(data);
+          if (data.recipientName) {
+            setTextSignature(data.recipientName);
+          }
+        } else {
+          setError("Invoice not found.");
         }
       } catch (e) {
-        console.error("Failed to parse invoice data from URL:", e);
-        setError("Invalid invoice link. Data is corrupted.");
-        setInvoiceData(mockInvoiceFallback); 
-        if (mockInvoiceFallback.recipientName) {
-            setTextSignature(mockInvoiceFallback.recipientName);
-        }
-        toast({ variant: "destructive", title: "Error", description: "Corrupted invoice data in link. Displaying sample." });
+        setError("Failed to load invoice.");
+        console.error("Error fetching invoice for signing:", e);
       }
-    } else {
-      console.warn(`No invoice data in URL for ID: ${invoiceId}. Using mock data.`);
-      setInvoiceData(mockInvoiceFallback);
-      if (mockInvoiceFallback.recipientName) {
-        setTextSignature(mockInvoiceFallback.recipientName);
-      }
-    }
-  }, [invoiceId, searchParams]);
+    };
+    fetchInvoice();
+  }, [invoiceId]);
 
   const handleSignatureDataChange = useCallback((dataUrl: string | null) => {
     setSignatureDataUrl(dataUrl);
   }, []);
-  
+
   const toggleAgreement = useCallback((e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -107,26 +96,20 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     const isDrawSignatureMeaningful = !!signatureDataUrl;
     const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
     const hasSignature = isDrawSignatureMeaningful || isTextSignatureProvided;
-    
+
     if (hasSignature && agreementChecked) {
       setSignButtonText('✅ Sign Invoice Now');
       setSignButtonDisabled(false);
-      setSignButtonStyle({ backgroundColor: '#10B981', cursor: 'pointer', opacity: '1' }); 
+      setSignButtonStyle({ backgroundColor: 'hsl(var(--accent))', cursor: 'pointer', opacity: '1' });
       setSignatureStatusText('✓ Ready to sign!');
       setSignatureStatusColor('hsl(var(--accent))');
     } else if (hasSignature && !agreementChecked) {
       setSignButtonText('📋 Please agree to terms below');
       setSignButtonDisabled(true);
-      setSignButtonStyle({ backgroundColor: '#F59E0B', cursor: 'not-allowed', opacity: '0.7' }); 
+      setSignButtonStyle({ backgroundColor: 'hsl(var(--destructive))', cursor: 'not-allowed', opacity: '0.7' });
       setSignatureStatusText('⚠️ Please check the agreement box');
       setSignatureStatusColor('hsl(var(--destructive))');
-    } else if (!hasSignature && agreementChecked) {
-      setSignButtonText(useTextSignature ? '✍️ Please type your signature' : '✍️ Please draw your signature above');
-      setSignButtonDisabled(true);
-      setSignButtonStyle({ backgroundColor: '#3B82F6', cursor: 'not-allowed', opacity: '0.7' }); 
-      setSignatureStatusText(useTextSignature ? '✍️ Type your signature in the box above' : '✍️ Draw your signature in the box above');
-      setSignatureStatusColor('hsl(var(--primary))');
-    } else { 
+    } else {
       setSignButtonText('⏸️ Complete signature and agreement');
       setSignButtonDisabled(true);
       setSignButtonStyle({ backgroundColor: 'hsl(var(--muted-foreground))', cursor: 'not-allowed', opacity: '0.5' });
@@ -135,95 +118,69 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     }
   }, [signatureDataUrl, textSignature, useTextSignature, agreementChecked]);
 
-
-  const handleSign = () => {
-    const isDrawSignatureActuallyMeaningful = !!signatureDataUrl;
-    const isTextSignatureProvided = useTextSignature && textSignature.trim() !== '';
-    const hasValidSignature = isDrawSignatureActuallyMeaningful || isTextSignatureProvided;
-
+  const handleSign = async () => {
+    const hasValidSignature = (useTextSignature && textSignature.trim()) || (!useTextSignature && signatureDataUrl);
     if (!agreementChecked) {
-      toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms before signing.", duration: 3000 });
+      toast({ variant: "destructive", title: "Agreement Required", description: "Please agree to the terms." });
       return;
     }
     if (!hasValidSignature) {
-      toast({ variant: "destructive", title: "Signature Required", description: "Please provide a valid signature.", duration: 3000 });
+      toast({ variant: "destructive", title: "Signature Required", description: "Please provide a signature." });
       return;
     }
 
     setIsLoading(true);
-    toast({ title: "Processing Signature...", description: "Please wait a moment.", duration: 2000 });
-    
-    const signedAt = new Date().toISOString();
-    const signedUserAgent = navigator.userAgent;
-    const finalInvoiceId = invoiceData?.invoiceNumber || invoiceId;
-        
-    if (!useTextSignature && isDrawSignatureActuallyMeaningful && signatureDataUrl) {
-      try {
-        localStorage.setItem(TEMP_DRAWN_SIGNATURE_KEY, signatureDataUrl);
-        console.log('SignInvoicePageClient: Stored drawn signature in localStorage. Length:', signatureDataUrl.length);
-      } catch (e) {
-        console.error('SignInvoicePageClient: Failed to store signature in localStorage', e);
-        toast({ variant: "destructive", title: "Storage Error", description: "Could not temporarily save signature." });
-        setIsLoading(false);
-        return;
-      }
-    } else if (useTextSignature && !isTextSignatureProvided) {
-        console.warn('SignInvoicePageClient: Text signature selected but no text provided.');
-        setIsLoading(false);
-        toast({ variant: "destructive", title: "Signature Error", description: "Please type your signature." });
-        return;
-    } else if (!useTextSignature && !isDrawSignatureActuallyMeaningful) {
-        console.warn('SignInvoicePageClient: Draw signature selected but no meaningful drawing found.');
-        setIsLoading(false);
-        toast({ variant: "destructive", title: "Signature Error", description: "Please draw your signature." });
-        return;
-    }
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      let url = `/signing-complete?invoiceId=${encodeURIComponent(finalInvoiceId)}`;
-      if (invoiceData) {
-        const dataToPass = { ...invoiceData }; 
-        url += `&data=${encodeURIComponent(JSON.stringify(dataToPass))}`;
+    toast({ title: "Processing Signature...", description: "Please wait a moment." });
+
+    try {
+      const signaturePayload = {
+        signatureType: useTextSignature ? 'text' : 'draw',
+        signatureData: useTextSignature ? textSignature.trim() : signatureDataUrl,
+        signedAt: new Date().toISOString(),
+        signedUserAgent: navigator.userAgent,
+        status: 'signed'
+      };
+
+      const invoiceRef = doc(db, 'invoices', invoiceId);
+      await updateDoc(invoiceRef, signaturePayload as any);
+
+      // Temporary storage for drawn signature to pass to next page, as it can be too long for URL
+      if (!useTextSignature && signatureDataUrl) {
+          localStorage.setItem(TEMP_DRAWN_SIGNATURE_KEY, signatureDataUrl);
       }
 
-      if (useTextSignature && textSignature.trim()) { 
-        url += `&signature=${encodeURIComponent(textSignature.trim())}`;
-      }
-      
-      url += `&signatureType=${useTextSignature ? 'text' : 'draw'}`;
-      url += `&signedAt=${encodeURIComponent(signedAt)}`;
-      url += `&signedUserAgent=${encodeURIComponent(signedUserAgent)}`;
-      
-      router.push(url);
-    }, 1500);
+      router.push(`/signing-complete/${invoiceId}`);
+    } catch (error) {
+      console.error("Error signing invoice:", error);
+      toast({ variant: "destructive", title: "Signing Failed", description: "Could not save the signature." });
+      setIsLoading(false);
+    }
   };
 
-  if (error && !invoiceData) { 
+  if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
         <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold text-text-dark mb-2">Error Loading Invoice</h1>
-        <p className="text-text-light mb-6">{error}</p>
+        <h1 className="text-2xl font-bold text-foreground mb-2">Cannot Sign Invoice</h1>
+        <p className="text-muted-foreground mb-6">{error}</p>
       </div>
     );
   }
-  
+
   if (!invoiceData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-text-light">Loading invoice...</p>
+        <p className="mt-4 text-muted-foreground">Loading invoice...</p>
       </div>
     );
   }
-  
+
   const currencySymbol = currencySymbols[invoiceData.currency] || invoiceData.currency;
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-0 animate-fadeIn">
-      <Card className="bg-card shadow-card-shadow rounded-xl overflow-hidden border border-border">
+      <Card className="bg-card shadow-sm rounded-xl overflow-hidden border border-border">
         <CardHeader className="bg-primary/5 p-6 border-b border-primary/10">
           <div className="flex items-center justify-center space-x-3">
             <FileText className="w-10 h-10 text-primary" />
@@ -247,9 +204,7 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
               <p className="text-muted-foreground">{invoiceData.recipientEmail}</p>
             </div>
           </div>
-          
           <Separator />
-
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
                 <span className="font-semibold text-foreground">Invoice Number:</span>
@@ -260,33 +215,12 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
                 <span className="text-muted-foreground">{format(new Date(invoiceData.invoiceDate), 'PPP')}</span>
             </div>
           </div>
-          
           <Separator />
-
           <div>
             <h3 className="font-semibold text-foreground mb-2">Description:</h3>
             <p className="text-muted-foreground whitespace-pre-wrap p-3 bg-background rounded-md text-sm border border-border">{invoiceData.invoiceDescription}</p>
           </div>
-
-          {invoiceData.items && invoiceData.items.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Itemized Breakdown:</h3>
-                <div className="space-y-2 border border-border rounded-md p-3 bg-background/50">
-                  {invoiceData.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-muted-foreground text-sm pb-1 border-b border-border/50 last:border-b-0 last:pb-0">
-                      <span>{item.description} (x{item.quantity})</span>
-                      <span>{currencySymbols[invoiceData.currency] || invoiceData.currency}{item.total.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-          
           <Separator className="my-6" />
-          
           <div className="text-right space-y-1 bg-accent/5 p-4 rounded-lg border border-accent/20">
             <p className="text-foreground text-xl font-medium">Total Amount Due:</p>
             <p className="text-accent font-bold text-3xl md:text-4xl font-headline">
@@ -297,9 +231,9 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
         </CardContent>
       </Card>
 
-      <Card className="mt-8 bg-card shadow-card-shadow rounded-xl overflow-hidden border border-border signature-section">
-        <CardHeader className="bg-purple-accent-DEFAULT/5 p-6 border-b border-purple-accent-DEFAULT/10">
-          <CardTitle className="text-2xl font-modern-sans text-purple-accent-DEFAULT text-center">Please Review and Sign Below</CardTitle>
+      <Card className="mt-8 bg-card shadow-sm rounded-xl overflow-hidden border border-border signature-section">
+        <CardHeader className="bg-purple-accent/5 p-6 border-b border-purple-accent/10">
+          <CardTitle className="text-2xl font-modern-sans text-purple-accent text-center">Please Review and Sign Below</CardTitle>
         </CardHeader>
         <CardContent className="p-6 md:p-8 space-y-4 font-body">
           <div className="flex items-center space-x-2 mb-4">
@@ -366,14 +300,10 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
             id="sign-invoice-button"
             onClick={handleSign} 
             disabled={isLoading || signButtonDisabled}
-            className="w-full text-lg py-3 min-h-[50px] font-semibold rounded-xl shadow-button-hover-blue transition-all duration-300 active:scale-95"
-            style={isLoading ? { backgroundColor: 'hsl(var(--muted-foreground))', cursor: 'wait', opacity: '0.7', color: 'hsl(var(--background))' } : signButtonStyle}
+            className="w-full text-lg py-3 min-h-[50px] font-semibold rounded-xl shadow-md transition-all duration-300 active:scale-95"
+            style={isLoading ? { cursor: 'wait', opacity: '0.7' } : signButtonStyle}
           >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              signButtonText.startsWith('✅') && <Check className="mr-2 h-5 w-5" />
-            )}
+            {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : signButtonText.startsWith('✅') && <Check className="mr-2 h-5 w-5" />}
             {isLoading ? 'Processing Signature...' : signButtonText}
           </Button>
         </CardFooter>
@@ -381,3 +311,5 @@ export default function SignInvoicePageClient({ invoiceId }: { invoiceId: string
     </div>
   );
 }
+
+    

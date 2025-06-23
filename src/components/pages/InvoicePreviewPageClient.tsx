@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Edit, Send, AlertTriangle, Loader2 } from 'lucide-react';
@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import emailjs from '@emailjs/browser';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface InvoiceData {
   senderName: string;
@@ -21,7 +23,7 @@ interface InvoiceData {
   invoiceDescription: string;
   amount: number;
   currency: string;
-  invoiceDate: string; // Store as ISO string
+  invoiceDate: string; // Stored as ISO string
   invoiceNumber: string;
 }
 
@@ -34,36 +36,44 @@ const currencySymbols: { [key: string]: string } = {
   CAD: 'C$',
 };
 
-export default function InvoicePreviewPageClient() {
+export default function InvoicePreviewPageClient({ invoiceId }: { invoiceId: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const dataString = searchParams.get('data');
-      if (dataString) {
-        const decodedData = JSON.parse(decodeURIComponent(dataString)) as InvoiceData;
-        decodedData.amount = parseFloat(String(decodedData.amount));
-        setInvoiceData(decodedData);
-      } else {
-        setError("No invoice data found to preview.");
-        toast({ variant: "destructive", title: "Error", description: "Could not load invoice data for preview." });
-      }
-    } catch (e) {
-      console.error("Failed to parse invoice data:", e);
-      setError("Invalid invoice data format.");
-      toast({ variant: "destructive", title: "Error", description: "Could not parse invoice data for preview." });
+    if (!invoiceId) {
+      setError("No invoice ID provided.");
+      return;
     }
-  }, [searchParams]);
+
+    const fetchInvoice = async () => {
+      try {
+        const docRef = doc(db, 'invoices', invoiceId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          setInvoiceData(docSnap.data() as InvoiceData);
+        } else {
+          setError("Invoice not found.");
+          toast({ variant: "destructive", title: "Error", description: "Could not find the specified invoice." });
+        }
+      } catch (e) {
+        console.error("Failed to fetch invoice data:", e);
+        setError("Failed to fetch invoice data from the database.");
+        toast({ variant: "destructive", title: "Error", description: "There was a problem fetching the invoice." });
+      }
+    };
+
+    fetchInvoice();
+  }, [invoiceId]);
 
   const handleEdit = () => {
-    if (invoiceData) {
-      const query = encodeURIComponent(JSON.stringify(invoiceData));
-      router.push(`/create-invoice?editData=${query}`);
-    }
+    // Note: The edit flow would need to be updated to use Firestore.
+    // For now, it's disabled. A user can create a new one.
+    toast({ title: "Edit Not Implemented", description: "Please create a new invoice to make changes." });
+    // router.push(`/create-invoice?editId=${invoiceId}`);
   };
 
   const handleSendInvoice = async () => {
@@ -86,7 +96,7 @@ export default function InvoicePreviewPageClient() {
       to_name: invoiceData.recipientName,
       from_name: invoiceData.senderName,
       from_email: invoiceData.senderEmail,
-      invoice_link: `${window.location.origin}/sign-invoice/${encodeURIComponent(invoiceData.invoiceNumber)}?data=${encodeURIComponent(JSON.stringify(invoiceData))}`,
+      invoice_link: `${window.location.origin}/sign-invoice/${invoiceId}`,
       invoice_number: invoiceData.invoiceNumber,
       invoice_date: formattedDate,
       invoice_description: invoiceData.invoiceDescription,
@@ -96,17 +106,15 @@ export default function InvoicePreviewPageClient() {
     };
     
     if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-       toast({
+      toast({
         variant: "default",
-        title: "Developer Info: Email Not Configured",
-        description: "Simulating email send. To send real emails, set up your EmailJS environment variables.",
+        title: "Developer Note: Email Not Configured",
+        description: "Simulating email send. Set up EmailJS environment variables to send real emails.",
         duration: 8000,
       });
-      console.warn("EmailJS not fully configured. Check Vercel environment variables or .env.local: NEXT_PUBLIC_EMAILJS_SERVICE_ID, NEXT_PUBLIC_EMAILJS_TEMPLATE_ID, NEXT_PUBLIC_EMAILJS_PUBLIC_KEY. Simulating email send for navigation.");
+      console.warn("EmailJS not fully configured. Simulating email send for navigation.");
       setTimeout(() => {
-        if (invoiceData) { // Ensure invoiceData is still valid
-            router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
-        }
+        router.push(`/email-sent?invoiceId=${invoiceId}&recipientEmail=${encodeURIComponent(invoiceData.recipientEmail)}`);
         setIsSending(false);
       }, 1500);
       return;
@@ -115,7 +123,7 @@ export default function InvoicePreviewPageClient() {
     try {
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams, EMAILJS_PUBLIC_KEY);
       toast({ variant: "success", title: "Invoice Sent!", description: "The invoice has been successfully emailed for signature." });
-      router.push('/email-sent?recipientEmail=' + encodeURIComponent(invoiceData.recipientEmail));
+      router.push(`/email-sent?invoiceId=${invoiceId}&recipientEmail=${encodeURIComponent(invoiceData.recipientEmail)}`);
     } catch (emailError) {
       console.error('EmailJS send error:', emailError);
       toast({ variant: "destructive", title: "Email Send Failed", description: "Could not send the invoice email. Please check your EmailJS configuration or try again later." });
@@ -128,8 +136,8 @@ export default function InvoicePreviewPageClient() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] text-center p-4">
         <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold text-text-dark mb-2">Error Loading Preview</h1>
-        <p className="text-text-light mb-6">{error}</p>
+        <h1 className="text-2xl font-bold text-foreground mb-2">Error Loading Preview</h1>
+        <p className="text-muted-foreground mb-6">{error}</p>
         <Button onClick={() => router.push('/create-invoice')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Create Invoice
         </Button>
@@ -141,7 +149,7 @@ export default function InvoicePreviewPageClient() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-text-light">Loading invoice preview...</p>
+        <p className="mt-4 text-muted-foreground">Loading invoice preview...</p>
       </div>
     );
   }
@@ -154,7 +162,7 @@ export default function InvoicePreviewPageClient() {
         <ArrowLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to Form
       </Button>
 
-      <Card className="bg-card shadow-card-shadow rounded-xl overflow-hidden">
+      <Card className="bg-card shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="bg-primary/5 p-6">
           <CardTitle className="text-3xl font-headline text-primary text-center">Invoice Preview</CardTitle>
           <CardDescription className="text-muted-foreground text-center font-body">Review the invoice details below before sending.</CardDescription>
@@ -208,7 +216,7 @@ export default function InvoicePreviewPageClient() {
         </CardContent>
       </Card>
 
-      <Card className="mt-8 bg-card shadow-card-shadow rounded-xl">
+      <Card className="mt-8 bg-card shadow-sm rounded-xl">
         <CardHeader>
             <h2 className="text-xl font-modern-sans text-foreground text-center">Ready to send for signature?</h2>
         </CardHeader>
@@ -223,7 +231,7 @@ export default function InvoicePreviewPageClient() {
             <Button 
               onClick={handleSendInvoice} 
               disabled={isSending}
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-lg shadow-button-hover-green transform hover:-translate-y-0.5 transition-all duration-300 active:scale-95 flex items-center justify-center px-6 py-3 text-base"
+              className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-lg shadow-sm transform hover:-translate-y-0.5 transition-all duration-300 active:scale-95 flex items-center justify-center px-6 py-3 text-base"
             >
               {isSending ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -238,3 +246,5 @@ export default function InvoicePreviewPageClient() {
     </div>
   );
 }
+
+    

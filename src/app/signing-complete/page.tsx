@@ -1,10 +1,8 @@
-import SigningCompletePageClient from '@/components/pages/SigningCompletePageClient';
-import { Suspense } from 'react';
 
-export default function SigningCompletePage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <SigningCompletePageClient />
-    </Suspense>
-  );
+// This file is being replaced by a dynamic route
+// Please see src/app/signing-complete/[invoiceId]/page.tsx
+export default function SigningCompleteRedirect() {
+  return null;
 }
+
+    
