@@ -2,7 +2,7 @@
 
 import type { User } from 'firebase/auth';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
@@ -22,35 +22,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      
+      // Process the redirect result after the auth state has been initially determined.
+      // This runs when the user is redirected back to the app after signing in.
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          // User has successfully signed in via redirect.
+          const user = result.user;
+          await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            lastLogin: serverTimestamp(),
+          }, { merge: true });
+          
+          toast({ title: 'Sign In Successful', description: `Welcome back, ${user.displayName}!` });
+        }
+      } catch (error: any) {
+        // Don't show an error toast if the user simply cancelled the sign-in.
+        if (error.code !== 'auth/cancelled-popup-request') {
+           console.error('Redirect sign-in error:', error);
+           toast({ variant: 'destructive', title: 'Login Failed', description: 'Could not complete sign-in. Please try again.' });
+        }
+      }
+      
       setLoading(false);
     });
+    
     return () => unsubscribe();
   }, []);
 
   const signInWithGoogle = async () => {
+    setLoading(true); // Show a loading indicator while the redirect happens.
     const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Auto-save to Firestore users collection
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        lastLogin: serverTimestamp(),
-      }, { merge: true });
-
-      console.log('User signed in and saved to Firestore');
-      toast({ title: 'Sign In Successful', description: `Welcome back, ${user.displayName}!` });
-
-    } catch (error) {
-      console.error('Login error:', error);
-      toast({ variant: 'destructive', title: 'Login Failed', description: 'Could not sign in with Google. Please try again.' });
-    }
+    await signInWithRedirect(auth, provider);
+    // The result will be handled by the `getRedirectResult` call in the useEffect hook.
   };
 
   const logout = async () => {
